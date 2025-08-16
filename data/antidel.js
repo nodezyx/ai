@@ -11,7 +11,7 @@ const AntiDelDB = DATABASE.define('AntiDelete', {
     },
     status: {
         type: DataTypes.BOOLEAN,
-        defaultValue: config.ANTI_DELETE || false,
+        defaultValue: config.ANTIDELETE || false,
     },
 }, {
     tableName: 'antidelete',
@@ -45,7 +45,7 @@ async function initializeAntiDeleteSettings() {
             // Create new record if doesn't exist
             await AntiDelDB.findOrCreate({
                 where: { id: 1 },
-                defaults: { status: config.ANTI_DELETE || false },
+                defaults: { status: config.ANTIDELETE || false },
             });
         }
         isInitialized = true;
@@ -54,7 +54,7 @@ async function initializeAntiDeleteSettings() {
         // If table doesn't exist at all, create it
         if (error.original && error.original.code === 'SQLITE_ERROR' && error.original.message.includes('no such table')) {
             await AntiDelDB.sync();
-            await AntiDelDB.create({ id: 1, status: config.ANTI_DELETE || false });
+            await AntiDelDB.create({ id: 1, status: config.ANTIDELETE || false });
             isInitialized = true;
         }
     }
@@ -75,10 +75,10 @@ async function getAnti() {
     try {
         await initializeAntiDeleteSettings();
         const record = await AntiDelDB.findByPk(1);
-        return record ? record.status : (config.ANTI_DELETE || false);
+        return record ? record.status : (config.ANTIDELETE || false);
     } catch (error) {
         console.error('Error getting anti-delete status:', error);
-        return config.ANTI_DELETE || false;
+        return config.ANTIDELETE || false;
     }
 }
 
