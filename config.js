@@ -3,69 +3,71 @@ const path = require('path');
 const { getConfig } = require("./lib/configdb");
 const settings = require('./settings');
 
-if (fs.existsSync('config.env')) require('dotenv').config({ path: './config.env' });
+// Load environment variables from config.env if it exists
+if (fs.existsSync('config.env')) {
+    require('dotenv').config({ path: './config.env' });
+}
 
+// Helper function to convert text to boolean
 function convertToBool(text, fault = 'true') {
-    return text === fault ? true : false;
+    return text === fault;
 }
 
 module.exports = {
     // ===== BOT CORE SETTINGS =====
     CHATBOT: getConfig("CHATBOT") || "on",
-    SESSION_ID: settings.SESSION_ID || process.env.SESSION_ID || "", // Your bot's session ID (keep it secure)
-    PREFIX: getConfig("PREFIX") || settings.PREFIX || "." ,  // Command prefix (e.g., "., / ! * - +")
-    BOT_NAME: process.env.BOT_NAME || getConfig("BOT_NAME") || "SUBZERO-MD",  // Bot's display name
-    MODE: getConfig("MODE") || process.env.MODE || "public",        // Bot mode: public/private/group/inbox
-    REPO: process.env.REPO || "https://github.com/mrfrankofcc/SUBZERO-MD",  // Bot's GitHub repo
-    BAILEYS: process.env.BAILEYS || "@whiskeysockets/baileys",  // Bot's BAILEYS
+    SESSION_ID: settings.SESSION_ID || process.env.SESSION_ID || "",
+    PREFIX: getConfig("PREFIX") || settings.PREFIX || ".",
+    BOTNAME: process.env.BOTNAME || getConfig("BOTNAME") || "SUBZERO-MD",
+    MODE: getConfig("MODE") || process.env.MODE || "public",
+    REPO: process.env.REPO || "https://github.com/mrfrankofcc/SUBZERO-MD",
+    BAILEYS: process.env.BAILEYS || "@whiskeysockets/baileys",
+    TOKEN: process.env.TOKEN || "cBxbNViY7tfamYP8W0uyU3Hv7wbxXy3Cikpw",
 
-    // ===== OWNER & DEVELOPER SETTINGS =====
-    OWNER_NUMBER: settings.OWNER_NUMBER || process.env.OWNER_NUMBER || "263719647303",  // Owner's WhatsApp number
-    OWNER_NAME: process.env.OWNER_NAME || getConfig("OWNER_NAME") || "Mr Frank",           // Owner's name
-    DEV: process.env.DEV || "263719647303",                     // Developer's contact number
-    DEVELOPER_NUMBER: '263719647303@s.whatsapp.net',            // Developer's WhatsApp ID
+    // ===== OWNER & DEVELOPER INFO =====
+    OWNERNUMBER: settings.OWNERNUMBER || process.env.OWNERNUMBER || "263719647303",
+    OWNERNAME: process.env.OWNERNAME || getConfig("OWNERNAME") || "Mr Frank",
+    DEV: process.env.DEV || "263719647303",
+    DEVELOPER_NUMBER: '263719647303@s.whatsapp.net',
 
     // ===== AUTO-RESPONSE SETTINGS =====
-    AUTO_REPLY: process.env.AUTO_REPLY || "false",              // Enable/disable auto-reply
-    AUTO_STATUS_REPLY: process.env.AUTO_STATUS_REPLY || "false",// Reply to status updates?
-    AUTO_STATUS_MSG: process.env.AUTO_STATUS_MSG || "*SUBZERO BOT VIEWED YOUR STATUS 🤖*",  // Status reply message
-    READ_MESSAGE: process.env.READ_MESSAGE || "false",          // Mark messages as read automatically?
+    AUTOREPLY: process.env.AUTOREPLY || "false",
+    AUTOSTATUSREPLY: process.env.AUTOSTATUSREPLY || "false",
+    AUTOSTATUSMSG: process.env.AUTOSTATUSMSG || "*SUBZERO BOT VIEWED YOUR STATUS 🤖*",
+    AUTOREADMESSAGE: process.env.AUTOREADMESSAGE || "false",
 
     // ===== REACTION & STICKER SETTINGS =====
-    AUTO_REACT: getConfig("AUTO_REACT") || process.env.AUTO_REACT || "false",              // Auto-react to messages?
-    CUSTOM_REACT: process.env.CUSTOM_REACT || "false",          // Use custom emoji reactions?
-    CUSTOM_REACT_EMOJIS: process.env.CUSTOM_REACT_EMOJIS || "💝,💖,💗,❤️‍🩹,❤️,🧡,💛,💚,💙,💜,🤎,🖤,🤍",  // Custom reaction emojis
-    STICKER_NAME: process.env.STICKER_NAME || "SUBZERO-MD",     // Sticker pack name
-    AUTO_STICKER: process.env.AUTO_STICKER || "false",          // Auto-send stickers?
-    HEART_REACT: process.env.HEART_REACT || "false",
-    OWNER_REACT: getConfig("OWNER_REACT") ||process.env.OWNER_REACT || "false",
-    
+    AUTOREACT: getConfig("AUTOREACT") || process.env.AUTOREACT || "false",
+    CUSTOMREACT: process.env.CUSTOMREACT || "false",
+    CUSTOMREACTEMOJIS: process.env.CUSTOMREACTEMOJIS || "💝,💖,💗,❤️‍🩹,❤️,🧡,💛,💚,💙,💜,🤎,🖤,🤍",
+    STICKER_NAME: process.env.STICKERNAME || "SUBZERO-MD",
+    AUTOSTICKER: process.env.AUTOSTICKER || "false",
+    HEARTREACT: process.env.HEARTREACT || "false",
+    OWNERREACT: getConfig("OWNERREACT") || process.env.OWNERREACT || "false",
+
     // ===== MEDIA & AUTOMATION =====
-    AUTO_VOICE: process.env.AUTO_VOICE || "false",              // Auto-send voice messages?
-    AUTO_RECORDING: getConfig("AUTO_RECORDING") || process.env.AUTO_RECORDING || "false",      // Auto-record voice notes?
-    AUTO_TYPING:  getConfig("AUTO_TYPING") || process.env.AUTO_TYPING || "false",            // Show typing indicator?
-    BOT_IMAGE: getConfig("BOT_IMAGE") || "https://files.catbox.moe/kuyhlf.jpg",  // https://i.postimg.cc/XNTmcqZ3/subzero-menu.png Bot's "alive" image
+    AUTOVOICE: process.env.AUTOVOICE || "false",
+    AUTORECORDING: getConfig("AUTORECORDING") || process.env.AUTORECORDING || "false",
+    AUTOTYPING: getConfig("AUTOTYPING") || process.env.AUTOTYPING || "false",
+    BOTIMAGE: getConfig("BOTIMAGE") || "https://files.catbox.moe/z9uv8u.jpg",
 
     // ===== SECURITY & ANTI-FEATURES =====
-    ANTI_DELETE: process.env.ANTI_DELETE || "true",
-    ANTI_CALL: getConfig("ANTICALL") || process.env.ANTI_CALL || "false",
-    ANTI_BAD: process.env.ANTI_BAD || "false",                  // Block bad words?
-    ANTI_LINK: getConfig("ANTILINK") || process.env.ANTI_LINK || "true",                 // Block links in groups?
-    ANTI_VV: process.env.ANTI_VV || "true",                     // Block view-once messages?
-    DELETE_LINKS: process.env.DELETE_LINKS || "false",          // Auto-delete links?
-    ANTI_DEL_PATH: process.env.ANTI_DEL_PATH || "inbox",          // Log deleted messages (or 'same' to resend)
-    ANTI_BOT: process.env.ANTI_BOT || "true",
-    PM_BLOCKER: process.env.PM_BLOCKER || "true",
+    ANTIDELETE: process.env.ANTIDELETE || "true",
+    ANTICALL: getConfig("ANTICALL") || process.env.ANTICALL || "false",
+    ANTIBAD: process.env.ANTIBAD || "false",
+    ANTILINK: getConfig("ANTILINK") || process.env.ANTILINK || "true",
+    ANTIVV: process.env.ANTIVV || "true",
+    ANTIBOT: process.env.ANTIBOT || "true",
+    DELETELINKS: process.env.DELETELINKS || "false",
+    ANTIDELPATH: process.env.ANTIDELPATH || "inbox",
+    PMBLOCKER: process.env.PMBLOCKER || "true",
 
     // ===== BOT BEHAVIOR & APPEARANCE =====
-    FOOTER: process.env.FOOTER || "*© Gᴇɴᴇʀᴀᴛᴇᴅ ʙʏ Sᴜʙᴢᴇʀᴏ*",  // Bot description
-    PUBLIC_MODE: process.env.PUBLIC_MODE || "true",              // Allow public commands?
-    ALWAYS_ONLINE:  getConfig("ALWAYS_ONLINE") || process.env.ALWAYS_ONLINE || "false",        // Show bot as always online?
-    AUTO_STATUS_REACT: getConfig("AUTO_STATUS_REACT") || process.env.AUTO_STATUS_REACT || "true", // React to status updates?
-    AUTO_STATUS_SEEN: getConfig("AUTO_STATUS_SEEN") || process.env.AUTO_STATUS_SEEN || "true", // VIEW to status updates?
-    AUTO_BIO: getConfig("AUTO_BIO") || process.env.AUTO_BIO || "false",
+    FOOTER: process.env.FOOTER || "*© Gᴇɴᴇʀᴀᴛᴇᴅ ʙʏ Sᴜʙᴢᴇʀᴏ*",
+    ALWAYSONLINE: getConfig("ALWAYSONLINE") || process.env.ALWAYSONLINE || "false",
+    AUTOSTATUSREACT: getConfig("AUTOSTATUSREACT") || process.env.AUTOSTATUSREACT || "true",
+    AUTOSTATUSSEEN: getConfig("AUTOSTATUSSEEN") || process.env.AUTOSTATUSSEEN || "true",
+    AUTOBIO: getConfig("AUTOBIO") || process.env.AUTO_BIO || "false",
     WELCOME_GOODBYE: getConfig("WELCOME_GOODBYE") || process.env.WELCOME_GOODBYE || "false",
-    AMDIN_EVENTS: process.env.ADMIN_EVENTS || "true",
+    AMDINEVENTS: process.env.ADMINEVENTS || "true"
 };
-
-
