@@ -88,7 +88,7 @@ cmd({
 
         // ارسال تصویر همراه با متن
         await conn.sendMessage(from, {
-            image: { url: "https://files.catbox.moe/yv8zy4.jpg" },  // آدرس تصویر دلخواه خود را وارد کنید
+            image: { url: "https://mrfrankk-cdn.hf.space/ice/file_1755455215631.jpg" },  // آدرس تصویر دلخواه خود را وارد کنید
             caption: text
         }, { quoted: mek });
 
