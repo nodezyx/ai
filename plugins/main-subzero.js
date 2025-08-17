@@ -23,7 +23,7 @@ cmd({
       
       *⟣┈───────────────•*
              👨‍💻 *DEVELOPER*
-     https://github.com/mrfrankofcc
+     https://github.com/mrfr8nk
        
       *⟣┈───────────────•*
              🧮 *RELEASE DATE*
