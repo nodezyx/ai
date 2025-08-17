@@ -9,7 +9,7 @@ cmd({
 }, async (conn, mek, m, { from }) => {
   try {
     conn.ev.on("call", async (json) => {
-      if (config.ANTI_CALL !== "true") return;
+      if (config.ANTICALL !== "true") return;
 
       for (const id of json) {
         if (id.status === "offer" && !id.isGroup) {
