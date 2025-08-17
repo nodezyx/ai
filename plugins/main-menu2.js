@@ -1,134 +1,192 @@
-const config = require('../config')
-const { cmd, commands } = require('../command')
-const { runtime } = require('../lib/functions')
+const config = require('../config');
+const { cmd, commands } = require('../command');
+const os = require("os");
+const { runtime } = require('../lib/functions');
+const axios = require('axios');
+const more = String.fromCharCode(8206);
+const readMore = more.repeat(4001);
 
-
-
-cmd({
-    pattern: "showmenu",
-    hidden: true
-}, async (conn, mek, m, { args, from }) => {
-    const category = args[0];
-    const cmdsInCat = commands.filter(cmd => cmd.category === category);
-    if (!cmdsInCat.length) {
-        return conn.sendMessage(from, { text: `❌ No commands found in '${category}'` }, { quoted: m });
-    }
-    let text = `📂 *Commands in ${category.toUpperCase()}*\n\n`;
-    for (const cmd of cmdsInCat) {
-        text += `➤ ${cmd.pattern}\n`;
-    }
-    await conn.sendMessage(from, { text }, { quoted: m });
-});
-
-// Button menu command
-cmd({
-    pattern: "bn",
-    desc: "Show smart button menu",
-    category: "tools",
-    filename: __filename
-}, async (conn, mek, m, { from }) => {
-    const picUrl = "https://i.postimg.cc/G3k8H6gC/IMG-20250603-WA0017.jpg";
-    const filtered = commands.filter(cmd => !["menu", "xbot", "misc"].includes(cmd.category));
-    const categories = [...new Set(filtered.map(cmd => cmd.category))];
-    
-    const sections = categories.map((cat, index) => {
-        const section = {
-            rows: [
-                {
-                    header: 'Menu',
-                    title: cat.charAt(0).toUpperCase() + cat.slice(1),
-                    description: `This for ${cat.charAt(0).toLowerCase() + cat.slice(1)} commands`,
-                    buttonid: `${prefix}showmenu ${categories}`
-                }
-            ]
-        };
-        if (index === 0) {
-            section.title = "Select a menu";
-            section.highlight_label = '𝐦𝐨𝐝𝐞𝐫𝐚𝐭𝐢𝐨𝐧 𝐦𝐞𝐧𝐮';
-        }
-        return section;
+function getHarareTime() {
+    return new Date().toLocaleString('en-US', {
+        timeZone: 'Africa/Harare',
+        hour12: true,
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric'
     });
+}
 
-    // Handle button text if it exists
-    const buttonText = m.text?.toLowerCase();
-    if (buttonText === `${prefix}Ping` || buttonText === `${prefix}ping`) {
-        const start = new Date().getTime();
-        const reactionEmojis = ['🔥', '⚡', '🚀', '💨', '🎯', '🎉', '🌟', '💥', '🕐', '🔹'];
-        const textEmojis = ['💎', '🏆', '⚡️', '🚀', '🎶', '🌠', '🌀', '🔱', '🛡️', '✨'];
-        const reactionEmoji = reactionEmojis[Math.floor(Math.random() * reactionEmojis.length)];
-        let textEmoji = textEmojis[Math.floor(Math.random() * textEmojis.length)];
-        while (textEmoji === reactionEmoji) {
-            textEmoji = textEmojis[Math.floor(Math.random() * textEmojis.length)];
+async function getBotVersion() {
+    try {
+        if (!config.REPO) return 'Ultimate';
+        const repoUrl = config.REPO;
+        const rawUrl = repoUrl.replace('github.com', 'raw.githubusercontent.com') + '/main/package.json';
+        const { data } = await axios.get(rawUrl);
+        return data.version || 'Ultimate';
+    } catch (error) {
+        console.error("Version check error:", error);
+        return 'Ultimate';
+    }
+}
+
+function fancy(txt) {
+    if (!txt || typeof txt !== 'string') return '';
+    const map = {
+        a: 'ᴀ', b: 'ʙ', c: 'ᴄ', d: 'ᴅ', e: 'ᴇ', f: 'ғ',
+        g: 'ɢ', h: 'ʜ', i: 'ɪ', j: 'ᴊ', k: 'ᴋ', l: 'ʟ',
+        m: 'ᴍ', n: 'ɴ', o: 'ᴏ', p: 'ᴘ', q: 'ǫ', r: 'ʀ',
+        s: 's', t: 'ᴛ', u: 'ᴜ', v: 'ᴠ', w: 'ᴡ', x: 'x',
+        y: 'ʏ', z: 'ᴢ', "1": "𝟏", "2": "𝟐", "3": "𝟑",
+        "4": "𝟒", "5": "𝟓", "6": "𝟔", "7": "𝟕", "8": "𝟖",
+        "9": "𝟗", "0": "𝟎", ".": ".", "-": "-", "_": "_"
+    };
+    return txt.toLowerCase().split('').map(c => map[c] || c).join('');
+}
+
+function generateCategorySection(categoryName, commandsList) {
+    if (!commandsList || !commandsList.length) return '';
+    
+    let section = `*🏮 \`${categoryName.toUpperCase()}\` 🏮*\n\n╭─────────────···◈\n`;
+    
+    commandsList.forEach(cmd => {
+        if (cmd.pattern) {
+            section += `*┋* *⬡ ${config.PREFIX}${fancy(cmd.pattern)}*\n`;
         }
-        await conn.sendMessage(from, { react: { text: textEmoji, key: mek.key } });
-        const end = new Date().getTime();
-        const responseTime = (end - start) / 1000;
-        const text = `> *SUBZERO-MD SPEED: ${responseTime.toFixed(2)}ms ${reactionEmoji}*`;
-        return await conn.sendMessage(from, { text: text }, { quoted: mek });
-    }
+    });
+    
+    section += `╰─────────────╶╶···◈\n\n`;
+    return section;
+}
 
-    if (buttonText === "Alive" || buttonText === `${prefix}alive`) {
-        return await conn.sendMessage(from, { text: "*✅ I am alive and ready to serve you!*" }, { quoted: mek });
-    }
+cmd({
+    pattern: "menu",
+    desc: "subzero menu",
+    alias: ["help", "commands"],
+    category: "core",
+    react: "✅",
+    filename: __filename
+}, 
+async (conn, mek, m, { from, pushname, reply }) => {
+    try {
+        await conn.sendPresenceUpdate('composing', from);
 
-    // Send button menu
-    await conn.sendMessage(from, {
-        image: { url: picUrl },
-        caption: "📋 *Main Menu*\n\nSelect a category from the menu below.",
-        footer: "> New menu - 2025",
-        buttons: [
-            {
-                buttonId: `${prefix}ping`,
-                buttonText: { displayText: 'PING' },
-                type: 1
-            },
-            {
-                buttonId: `${prefix}alive`,
-                buttonText: { displayText: 'ALIVE' },
-                type: 1
-            },
-            {
-                buttonId: `${prefix}flow-menu`,
-                buttonText: { displayText: '📋 Show Categories' },
-                type: 4,
-                nativeFlowInfo: {
-                    name: 'single_select',
-                    paramsJson: JSON.stringify({
-                        title: 'Select Menu',
-                        sections: sections
-                    })
+        const version = await getBotVersion();
+        const totalCommands = commands.filter(cmd => cmd.pattern).length;
+        const botname = "𝐒𝐔𝐁𝐙𝐄𝐑𝐎 𝐌𝐃";
+        const ownername = "𝐌𝐑 𝐅𝐑𝐀𝐍𝐊";
+        // Quoted message style
+const ice = {
+  key: {
+    remoteJid: '120363025036063173@g.us',
+    fromMe: false,
+    participant: '0@s.whatsapp.net'
+  },
+  message: {
+    groupInviteMessage: {
+      groupJid: '120363025036063173@g.us',
+      inviteCode: 'ABCD1234',
+      groupName: 'WhatsApp ✅ • Group',
+      caption: 'Subzero Smart Automation',
+      jpegThumbnail: null
+    }
+  }
+};
+        const subzero = { 
+            key: { 
+                remoteJid: 'status@broadcast', 
+                participant: '0@s.whatsapp.net' 
+            }, 
+            message: { 
+                newsletterAdminInviteMessage: { 
+                    newsletterJid: '120363270086174844@newsletter',
+                    newsletterName: "𝐈𝐂𝐘 𝐁𝐎𝐓",
+                    caption: `${botname} 𝐁𝐘 ${ownername}`, 
+                    inviteExpiration: 0
                 }
             }
-        ],
-        headerType: 4,
-        viewOnce: true
-    }, { quoted: m });
-});
-/*
-// Tagactive command
-const { cmd } = require("../command");
-const { getActivityList } = require("../lib/activity");
-cmd({
-    pattern: "tagactive",
-    desc: "Mentions the most active members in the group 📊",
-    category: "group",
-    filename: __filename,
-}, async (conn, mek, m, { from, reply, isGroup }) => {
-    try {
-        if (!isGroup) return reply("🚫 *This command can only be used in groups!*");
-        let activeList = getActivityList(from);
-        if (activeList.length === 0) return reply("⚠️ *No activity recorded yet!*");
+        };
+
+        // Filter valid commands
+        const validCommands = commands.filter(cmd => 
+            cmd.pattern && 
+            cmd.category && 
+            cmd.category.toLowerCase() !== 'menu' &&
+            !cmd.hideCommand
+        );
+
+        // Group commands by category
+        const categories = {};
+        validCommands.forEach(cmd => {
+            const category = cmd.category.toLowerCase();
+            if (!categories[category]) {
+                categories[category] = [];
+            }
+            categories[category].push(cmd);
+        });
+
+        // Generate menu sections
+        let menuSections = '';
+        Object.entries(categories)
+            .sort((a, b) => a[0].localeCompare(b[0])) // Sort categories alphabetically
+            .forEach(([category, cmds]) => {
+                menuSections += generateCategorySection(category, cmds);
+            });
+
+        let dec = `
+       \`\`\`${config.BOTNAME}\`\`\`
+    
+⟣──────────────────⟢
+▧ *ᴄʀᴇᴀᴛᴏʀ* : *ᴍʀ ғʀᴀɴᴋ (🇿🇼)*
+▧ *ᴍᴏᴅᴇ* : *${config.MODE}* 
+▧ *ᴘʀᴇғɪx* : *${config.PREFIX}*
+▧ *ʀᴀᴍ* : ${(process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2)}MB / ${Math.round(os.totalmem() / 1024 / 1024)}MB 
+▧ *ᴠᴇʀsɪᴏɴ* : *${version}* 
+▧ *ᴜᴘᴛɪᴍᴇ* : ${runtime(process.uptime())} 
+▧ *ᴄᴏᴍᴍᴀɴᴅs* : ${totalCommands}
+⟣──────────────────⟢
+
+> ＳＵＢＺＥＲＯ - ＭＤ- ＢＯＴ
+
+⟣──────────────────⟢
+${readMore}
+
+${menuSections}
+
+*━━━━━━━━━━━━━━━━━━━━*⁠⁠⁠⁠
+> ＭＡＤＥ ＢＹ ＭＲ ＦＲＡＮＫ
+*━━━━━━━━━━━━━━━━━━━━━*
+`;
+
+        const imageUrl = config.BOTIMAGE || 'https://i.postimg.cc/XNTmcqZ3/subzero-menu.png';
         
-        let topActive = activeList.slice(0, 5); // Get top 5 active users
-        let mentions = topActive.map((u) => `🔥 @${u.user.split("@")[0]} (${u.count} msgs)`).join("\n");
-        let text = `📊 *Most Active Members:*\n\n${mentions}\n\n🏆 *Stay engaged!*`;
+        await conn.sendMessage(
+            from,
+            {
+                image: { url: imageUrl },
+                caption: dec,
+                contextInfo: {
+                    mentionedJid: [m.sender],
+                    forwardingScore: 999,
+                    isForwarded: true,
+                    forwardedNewsletterMessageInfo: {
+                        newsletterJid: '120363304325601080@newsletter',
+                        newsletterName: '𝐒𝐔𝐁𝐙𝐄𝐑𝐎 𝐌𝐃 𝐕𝟓',
+                        serverMessageId: 143
+                    }
+                }
+            },
+            { quoted: ice }
+        );
+
+        await conn.sendPresenceUpdate('paused', from);
         
-        return await conn.sendMessage(from, { text, mentions: topActive.map((u) => u.user) }, { quoted: mek });
     } catch (e) {
-        console.log(e);
-        return reply(`❌ *Error:* ${e}`);
+        console.error('Menu Error:', e);
+        reply(`❌ Error generating menu: ${e.message}`);
     }
 });
 
-// Listgc command
-*/
+
