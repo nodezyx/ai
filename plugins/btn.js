@@ -1,76 +1,42 @@
-/* const { cmd } = require("../command");
-const axios = require("axios");
+const { cmd } = require('../command');
 
-// ==============================================
-// TEXT BUTTON MESSAGE EXAMPLE
-// ==============================================
 cmd({
-  pattern: "buttons",
-  desc: "Example of interactive buttons with text",
-  category: "utility",
-  react: "🛎️"
-}, async (conn, mek, m, { from }) => {
-  const buttons = [
-    { 
-      buttonId: 'help', 
-      buttonText: { displayText: '📚 Help' }, 
-      type: 1 
-    },
-    { 
-      buttonId: 'download', 
-      buttonText: { displayText: '⬇️ Download Menu' }, 
-      type: 1 
-    },
-    { 
-      buttonId: 'owner', 
-      buttonText: { displayText: '👑 Owner' }, 
-      type: 1 
+    on: "message"
+}, async (conn, mek, m, { from, isGroup }) => {
+    try {
+        // Check if message is viewOnce
+        if (m.message?.viewOnceMessage) {
+            const viewOnceContent = m.message.viewOnceMessage.message;
+            const messageType = Object.keys(viewOnceContent)[0];
+            
+            // Download the media
+            const buffer = await conn.downloadMediaMessage(m);
+            
+            // Prepare message based on type
+            let forwardContent = {};
+            switch (messageType) {
+                case 'imageMessage':
+                    forwardContent = { image: buffer };
+                    break;
+                case 'videoMessage':
+                    forwardContent = { video: buffer };
+                    break;
+                default:
+                    return; // Only handle images and videos
+            }
+            
+            // Add caption if exists
+            if (viewOnceContent[messageType].caption) {
+                forwardContent.caption = viewOnceContent[messageType].caption;
+            }
+            
+            // Forward to same chat
+            await conn.sendMessage(from, forwardContent, { quoted: m });
+            
+            // Optional: Log in console
+            console.log(`Forwarded viewOnce ${messageType} in ${isGroup ? 'group' : 'DM'}`);
+        }
+    } catch (error) {
+        console.error('ViewOnce Forward Error:', error);
     }
-  ];
-
-  const buttonMessage = {
-    text: `*${config.BOT_NAME} Main Menu*\n\nSelect an option below:`,
-    footer: config.FOOTER,
-    buttons: buttons,
-    headerType: 1
-  };
-
-  await conn.sendMessage(from, buttonMessage, { quoted: mek });
 });
-
-// ==============================================
-// IMAGE BUTTON MESSAGE EXAMPLE
-// ==============================================
-cmd({
-  pattern: "imgbuttons",
-  desc: "Example of interactive buttons with image",
-  category: "utility",
-  react: "🖼️"
-}, async (conn, mek, m, { from }) => {
-  const buttons = [
-    { 
-      buttonId: 'menu1', 
-      buttonText: { displayText: '🍔 Food Menu' }, 
-      type: 1 
-    },
-    { 
-      buttonId: 'menu2', 
-      buttonText: { displayText: '🍹 Drink Menu' }, 
-      type: 1 
-    }
-  ];
-
-  const buttonMessage = {
-    image: { 
-      url: "https://files.giftedtech.web.id/image/dYYcddesktop-wallpaper-paperswallpaper.jpeg" // Replace with your image URL
-    },
-    caption: "*Welcome to Our Restaurant!*\nWhat would you like to see?",
-    footer: "Tap a button below ↓",
-    buttons: buttons,
-    headerType: 4 // For image header
-  };
-
-  await conn.sendMessage(from, buttonMessage, { quoted: mek });
-});
-
-*/
