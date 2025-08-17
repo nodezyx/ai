@@ -66,7 +66,7 @@ cmd({
       return reply("❌ Provide a valid image URL or reply to an image.");
     }
 
-    await setConfig("BOT_IMAGE", imageUrl);
+    await setConfig("BOTIMAGE", imageUrl);
 
     await reply(`✅ Bot image updated.\n\n*New URL:* ${imageUrl}\n\n♻️ Restarting...`);
     setTimeout(() => exec("pm2 restart all"), 2000);
@@ -109,7 +109,7 @@ cmd({
   const newName = args.join(" ").trim();
   if (!newName) return reply("❌ Provide a bot name.");
 
-  await setConfig("BOT_NAME", newName);
+  await setConfig("BOTNAME", newName);
 
   await reply(`✅ Bot name updated to: *${newName}*\n\n♻️ Restarting...`);
   setTimeout(() => exec("pm2 restart all"), 2000);
@@ -127,7 +127,7 @@ cmd({
   const name = args.join(" ").trim();
   if (!name) return reply("❌ Provide an owner name.");
 
-  await setConfig("OWNER_NAME", name);
+  await setConfig("OWNERNAME", name);
 
   await reply(`✅ Owner name updated to: *${name}*\n\n♻️ Restarting...`);
   setTimeout(() => exec("pm2 restart all"), 2000);
@@ -278,55 +278,55 @@ cmd({
    - Usage: ${config.PREFIX}mode private/public
 
 🎯 *2. \`Auto Typing\`*
-   - Current Status: ${config.AUTO_TYPING || "off"}
+   - Current Status: ${config.AUTOTYPING || "off"}
    - Usage: ${config.PREFIX}autotyping on/off
 
 🌐 *3. \`Always Online\`*
-   - Current Status: ${config.ALWAYS_ONLINE || "off"}
+   - Current Status: ${config.ALWAYSONLINE || "off"}
    - Usage: ${config.PREFIX}alwaysonline on/off
 
 🎙️ *4. \`Auto Recording\`*
-   - Current Status: ${config.AUTO_RECORDING || "off"}
+   - Current Status: ${config.AUTORECORDING || "off"}
    - Usage: ${config.PREFIX}autorecording on/off
 
 📖 *5. \`Auto Read Status\`*
-   - Current Status: ${config.AUTO_STATUS_REACT || "off"}
+   - Current Status: ${config.AUTOSTATUSREACT || "off"}
    - Usage: ${config.PREFIX}autoreadstatus on/off
 
 🚫 *6. \`Anti Bad Word\`*
-   - Current Status: ${config.ANTI_BAD_WORD || "off"}
+   - Current Status: ${config.ANTIBADWORD || "off"}
    - Usage: ${config.PREFIX}antibad on/off
 
 🗑️ *7. \`Anti Delete\`*
-   - Current Status: ${config.ANTI_DELETE || "off"}
+   - Current Status: ${config.ANTIDELETE || "off"}
    - Usage: ${config.PREFIX}antidelete on/off
 
 🖼️ *8. \`Auto Sticker\`*
-   - Current Status: ${config.AUTO_STICKER || "off"}
+   - Current Status: ${config.AUTOSTICKER || "off"}
    - Usage: ${config.PREFIX}autosticker on/off
 
 💬 *9. \`Auto Reply\`*
-   - Current Status: ${config.AUTO_REPLY || "off"}
+   - Current Status: ${config.AUTOREPLY || "off"}
    - Usage: ${config.PREFIX}autoreply on/off
 
 ❤️ *10. \`Auto React\`*
-   - Current Status: ${config.AUTO_REACT || "off"}
+   - Current Status: ${config.AUTOREACT || "off"}
    - Usage: ${config.PREFIX}autoreact on/off
 
 📢 *11. \`Status Reply\`*
-   - Current Status: ${config.AUTO_STATUS_REPLY || "off"}
+   - Current Status: ${config.AUTOSTATUSREPLY || "off"}
    - Usage: ${config.PREFIX}autostatusreply on/off
 
 🔗 *12. \`Anti Link\`*
-   - Current Status: ${config.ANTI_LINK || "off"}
+   - Current Status: ${config.ANTILINK || "off"}
    - Usage: ${config.PREFIX}antilink on/off
 
 🤖 *13. \`Anti Bot\`*
-   - Current Status: ${config.ANTI_BOT || "off"}
+   - Current Status: ${config.ANTIBOT || "off"}
    - Usage: ${config.PREFIX}antibot off/warn/delete/kick
 
 💖 *14. \`Heart React\`*
-   - Current Status: ${config.HEART_REACT || "off"}
+   - Current Status: ${config.HEARTREACT || "off"}
    - Usage: ${config.PREFIX}heartreact on/off
 
 🔧 *15. \`Set Prefix\`*
@@ -471,7 +471,7 @@ async (conn, mek, m, { from, args, isOwner, reply }) => {
         return reply("*🫟 ᴇxᴀᴍᴘʟᴇ:  .ᴀᴜᴛᴏᴛʏᴘɪɴɢ ᴏɴ*");
     }
 
-    config.AUTO_TYPING = status === "on" ? "true" : "false";
+    config.AUTOTYPING = status === "on" ? "true" : "false";
     return reply(`Auto typing has been turned ${status}.`);
 });
 //--------------------------------------------
@@ -493,7 +493,7 @@ async (conn, mek, m, { from, args, isOwner, reply }) => {
         return reply("*🫟 ᴇxᴀᴍᴘʟᴇ:  .ᴀʟᴡᴀʏsᴏɴʟɪɴᴇ ᴏɴ*");
     }
 
-    config.ALWAYS_ONLINE = status === "on" ? "true" : "false";
+    config.ALWAYSONLINE = status === "on" ? "true" : "false";
     await conn.sendPresenceUpdate(status === "on" ? "available" : "unavailable", from);
     return reply(`Bot is now ${status === "on" ? "online" : "offline"}.`);
 });
@@ -515,7 +515,7 @@ async (conn, mek, m, { from, args, isOwner, reply }) => {
         return reply("*🫟 ᴇxᴀᴍᴘʟᴇ: .ᴀᴜᴛᴏʀᴇᴄᴏʀᴅɪɴɢ ᴏɴ*");
     }
 
-    config.AUTO_RECORDING = status === "on" ? "true" : "false";
+    config.AUTORECORDING = status === "on" ? "true" : "false";
     if (status === "on") {
         await conn.sendPresenceUpdate("recording", from);
         return reply("Auto recording is now enabled. Bot is recording...");
@@ -541,10 +541,10 @@ async (conn, mek, m, { from, args, isOwner, reply }) => {
     const status = args[0]?.toLowerCase();
     // Default value for AUTO_VIEW_STATUS is "false"
     if (args[0] === "on") {
-        config.AUTO_STATUS_REACT = "true";
+        config.AUTOSTATUSREACT = "true";
         return reply("Autoreact of statuses is now enabled.");
     } else if (args[0] === "off") {
-        config.AUTO_STATUS_REACT = "false";
+        config.AUTOSTATUSREACT = "false";
         return reply("Autoreact of statuses is now disabled.");
     } else {
         return reply(`*🫟 ᴇxᴀᴍᴘʟᴇ:  .autustatusreact on*`);
@@ -567,10 +567,10 @@ async (conn, mek, m, { from, args, isOwner, reply }) => {
     const status = args[0]?.toLowerCase();
     // Default value for AUTO_LIKE_STATUS is "false"
     if (args[0] === "on") {
-        config.AUTO_STATUS_SEEN = "true";
+        config.AUTOSTATUSSEEN = "true";
         return reply("Autoview of statuses is now enabled.");
     } else if (args[0] === "off") {
-        config.AUTO_STATUS_SEEN= "false";
+        config.AUTOSTATUSSEEN= "false";
         return reply("Autoview of statuses is now disabled.");
     } else {
         return reply(`Example: .autoviewstatus on`);
@@ -591,10 +591,10 @@ async (conn, mek, m, { from, args, isOwner, reply }) => {
     const status = args[0]?.toLowerCase();
     // Default value for AUTO_LIKE_STATUS is "false"
     if (args[0] === "on") {
-        config.ANTI_CALL = "true";
+        config.ANTICALL = "true";
         return reply("Anticall  is now enabled.");
     } else if (args[0] === "off") {
-        config.ANTI_CALL = "false";
+        config.ANTICALL = "false";
         return reply("Anticall  is now disabled.");
     } else {
         return reply(`⭕ Example: .anticall on/off`);
@@ -645,10 +645,10 @@ async (conn, mek, m, { from, args, isOwner, reply }) => {
     const status = args[0]?.toLowerCase();
     // Check the argument for enabling or disabling the anticall feature
     if (args[0] === "on") {
-        config.ANTI_BAD_WORD = "true";
+        config.ANTIBADWORD = "true";
         return reply("*anti bad word is now enabled.*");
     } else if (args[0] === "off") {
-        config.ANTI_BAD_WORD = "false";
+        config.ANTIBADWORD = "false";
         return reply("*anti bad word feature is now disabled*");
     } else {
         return reply(`_example:  .antibad on_`);
@@ -672,10 +672,10 @@ async (conn, mek, m, { from, args, isOwner, reply }) => {
     const status = args[0]?.toLowerCase();
     // Check the argument for enabling or disabling the anticall feature
     if (args[0] === "on") {
-        config.AUTO_STICKER = "true";
+        config.AUTOSTICKER = "true";
         return reply("auto-sticker feature is now enabled.");
     } else if (args[0] === "off") {
-        config.AUTO_STICKER = "false";
+        config.AUTOSTICKER = "false";
         return reply("auto-sticker feature is now disabled.");
     } else {
         return reply(`_example:  .autosticker on_`);
@@ -699,10 +699,10 @@ async (conn, mek, m, { from, args, isOwner, reply }) => {
     const status = args[0]?.toLowerCase();
     // Check the argument for enabling or disabling the anticall feature
     if (args[0] === "on") {
-        config.AUTO_REPLY = "true";
+        config.AUTOREPLY = "true";
         return reply("*auto-reply  is now enabled.*");
     } else if (args[0] === "off") {
-        config.AUTO_REPLY = "false";
+        config.AUTOREPLY = "false";
         return reply("auto-reply feature is now disabled.");
     } else {
         return reply(`*🫟 ᴇxᴀᴍᴘʟᴇ: . ᴀᴜᴛᴏʀᴇᴘʟʏ ᴏɴ*`);
@@ -727,10 +727,10 @@ async (conn, mek, m, { from, args, isOwner, reply }) => {
     const status = args[0]?.toLowerCase();
     // Check the argument for enabling or disabling the anticall feature
     if (args[0] === "on") {
-        config.AUTO_REACT = "true";
+        config.AUTOREACT = "true";
         await reply("autoreact feature is now enabled.");
     } else if (args[0] === "off") {
-        config.AUTO_REACT = "false";
+        config.AUTOREACT = "false";
         await reply("autoreact feature is now disabled.");
     } else {
         await reply(`*🔥 ᴇxᴀᴍᴘʟᴇ: .ᴀᴜᴛᴏʀᴇᴀᴄᴛ ᴏɴ*`);
@@ -754,10 +754,10 @@ async (conn, mek, m, { from, args, isOwner, reply }) => {
     const status = args[0]?.toLowerCase();
     // Check the argument for enabling or disabling the anticall feature
     if (args[0] === "on") {
-        config.AUTO_STATUS_REPLY = "true";
+        config.AUTOSTATUSREPLY = "true";
         return reply("status-reply feature is now enabled.");
     } else if (args[0] === "off") {
-        config.AUTO_STATUS_REPLY = "false";
+        config.AUTOSTATUSREPLY = "false";
         return reply("status-reply feature is now disabled.");
     } else {
         return reply(`*🫟 ᴇxᴀᴍᴘʟᴇ:  .sᴛᴀᴛᴜsʀᴇᴘʟʏ ᴏɴ*`);
@@ -888,10 +888,10 @@ cmd({
 
     // Enable or disable anti-link feature
     if (args[0] === "on") {
-      config.ANTI_LINK = "true";
+      config.ANTILINK = "true";
       await reply("Anti-link feature is now enabled in this group.");
     } else if (args[0] === "off") {
-      config.ANTI_LINK = "false";
+      config.ANTILINK = "false";
       await reply("Anti-link feature is now disabled in this group.");
     } else {
       await reply(`*Invalid input! Use either 'on' or 'off'. Example:antilink on*`);
@@ -1144,10 +1144,10 @@ cmd({
     const option = args[0]?.toLowerCase();
     
     if (option === "on" || option === "true") {
-        config.HEART_REACT = "true"; // Set to "true" for enabling
+        config.HEARTREACT = "true"; // Set to "true" for enabling
         return reply("❤️ Heart react is now enabled.");
     } else if (option === "off" || option === "false") {
-        config.HEART_REACT = "false"; // Set to "false" for disabling
+        config.HEARTREACT = "false"; // Set to "false" for disabling
         return reply("💔 Heart react is now disabled.");
     } else {
         return reply("*🔥 Example: .heartreact on* or *[.heartreact off]*");
