@@ -1,458 +1,136 @@
-const { cmd } = require('../command');
+const config = require('../config');
+const { cmd, commands } = require('../command');
+const os = require("os");
+const { runtime } = require('../lib/functions');
 const axios = require('axios');
-const yts = require('yt-search');
-const Config = require('../config');
 
-// Optimized axios
-const axiosInstance = axios.create({
-  timeout: 10000,
-  maxRedirects: 5
-});
+const more = String.fromCharCode(8206);
+const readMore = more.repeat(4001);
 
-cmd(
-    {
-        pattern: 'songo',
-        alias: ['playo', 'music'],
-        desc: 'YouTube audio downloader',
-        category: 'media',
-        react: '⌛',
-        use: '<YouTube URL or search query> [quality]',
-        filename: __filename,
-    },
-    async (conn, mek, m, { text, reply }) => {
-        try {
-            if (!text) return reply('🎵 *Usage:* .song <query/url> [quality]\nExample: .song https://youtu.be/ox4tmEV6-QU\n.song Alan Walker Lily 128');
+// Get Harare Time
+function getHarareTime() {
+    return new Date().toLocaleString('en-US', {
+        timeZone: 'Africa/Harare',
+        hour12: true,
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric'
+    });
+}
 
-            let [input, quality = '92'] = text.split(' ');
-            quality = ['92', '128', '256', '320'].includes(quality) ? quality : '92';
-
-            // Safely send reaction
-            try {
-                if (mek?.key?.id) {
-                    await conn.sendMessage(mek.chat, { react: { text: "⏳", key: mek.key } });
-                }
-            } catch (reactError) {
-                console.error('Failed to send reaction:', reactError);
-            }
-
-            // Get video URL using yt-search
-            let videoUrl, videoInfo;
-            if (input.match(/youtu\.?be/)) {
-                videoUrl = input;
-                // Extract video ID for yt-search
-                const videoId = input.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&\n?#]+)/)?.[1];
-                if (videoId) {
-                    videoInfo = await yts({ videoId });
-                }
-            } else {
-                const searchResults = await yts(input);
-                if (!searchResults.videos.length) return reply('🎵 No results found for your search');
-                videoUrl = searchResults.videos[0].url;
-                videoInfo = searchResults.videos[0];
-            }
-
-            const apiUrl = `https://mrfrank-api.vercel.app/api/ytmp3dl?url=${encodeURIComponent(videoUrl)}&quality=${quality}`;
-            const apiResponse = await axiosInstance.get(apiUrl);
-            if (!apiResponse.data?.status || !apiResponse.data.download?.url) {
-                return reply('🎵 Failed to fetch audio - API error');
-            }
-
-            const songData = apiResponse.data;
-
-            // Get thumbnail
-            let thumbnailBuffer;
-            try {
-                const thumbnailUrl = videoInfo?.thumbnail || songData.metadata.thumbnail;
-                if (thumbnailUrl) {
-                    const response = await axiosInstance.get(thumbnailUrl, { responseType: 'arraybuffer' });
-                    thumbnailBuffer = Buffer.from(response.data, 'binary');
-                }
-            } catch (e) {
-                console.error('Failed to fetch thumbnail:', e);
-                thumbnailBuffer = null;
-            }
-
-            const songInfo = `🎧 *${songData.metadata.title || videoInfo?.title || 'Unknown Title'}*\n` +
-                            `⏱ ${songData.metadata.timestamp || videoInfo?.timestamp || 'N/A'} | ${songData.download.quality}\n` +
-                            `👤 ${songData.metadata.author?.name || videoInfo?.author?.name || 'Unknown'}\n` +
-                            `👀 ${songData.metadata.views || videoInfo?.views || 'N/A'} views\n` +
-                            `📅 ${songData.metadata.ago || 'Unknown upload date'}\n\n` +
-                            `🔗 ${songData.url || videoUrl}\n\n` +
-                            `*Reply with:*\n` +
-                            `1 - For Audio Format 🎵\n` +
-                            `2 - For Document Format 📁\n\n` +
-                            `> © ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${Config.BOT_NAME}`;
-
-            const sentMsg = await conn.sendMessage(mek.chat, {
-                image: thumbnailBuffer,
-                caption: songInfo,
-                contextInfo: {
-                    externalAdReply: {
-                        title: songData.metadata.title || videoInfo?.title || 'YouTube Audio',
-                        body: `Quality: ${songData.download.quality}`,
-                        thumbnail: thumbnailBuffer,
-                        mediaType: 1,
-                        mediaUrl: songData.url || videoUrl,
-                        sourceUrl: songData.url || videoUrl
-                    }
-                }
-            }, { quoted: mek });
-
-            // Timeout after 60 seconds
-            const timeout = setTimeout(() => {
-                conn.ev.off('messages.upsert', messageListener);
-                reply("⌛ Session timed out. Please use the command again if needed.");
-            }, 60000);
-
-            const messageListener = async (messageUpdate) => {
-                try {
-                    const mekInfo = messageUpdate?.messages[0];
-                    if (!mekInfo?.message) return;
-
-                    const message = mekInfo.message;
-                    const messageType = message.conversation || message.extendedTextMessage?.text;
-                    const isReplyToSentMsg = message.extendedTextMessage?.contextInfo?.stanzaId === sentMsg.key.id;
-
-                    if (!isReplyToSentMsg || !['1', '2'].includes(messageType?.trim())) return;
-
-                    // Remove listener and timeout
-                    conn.ev.off('messages.upsert', messageListener);
-                    clearTimeout(timeout);
-
-                    const processingMsg = await reply("⏳ Processing your request...");
-                    
-                    const audioResponse = await axiosInstance.get(songData.download.url, {
-                        responseType: 'arraybuffer',
-                        headers: { Referer: 'https://www.youtube.com/' }
-                    });
-                    const audioBuffer = Buffer.from(audioResponse.data, 'binary');
-
-                    const fileName = `${songData.metadata.title || videoInfo?.title || 'audio'}.mp3`.replace(/[<>:"\/\\|?*]+/g, '');
-
-                    if (messageType.trim() === "1") {
-                        await conn.sendMessage(mek.chat, {
-                            audio: audioBuffer,
-                            mimetype: 'audio/mpeg',
-                            fileName: fileName,
-                            ptt: false
-                        }, { quoted: mek });
-                    } else {
-                        await conn.sendMessage(mek.chat, {
-                            document: audioBuffer,
-                            mimetype: 'audio/mpeg',
-                            fileName: fileName
-                        }, { quoted: mek });
-                    }
-
-                    await conn.sendMessage(mek.chat, { 
-                        text: '✅ Download completed successfully!', 
-                        edit: { ...processingMsg.key, remoteJid: mek.chat } 
-                    });
-                    
-                    try {
-                        if (mekInfo?.key?.id) {
-                            await conn.sendMessage(mek.chat, { react: { text: "✅", key: mekInfo.key } });
-                        }
-                    } catch (reactError) {
-                        console.error('Failed to send success reaction:', reactError);
-                    }
-
-                } catch (error) {
-                    console.error('Error in listener:', error);
-                    await reply('🎵 Error processing your request: ' + (error.message || 'Please try again'));
-                    
-                    try {
-                        if (mek?.key?.id) {
-                            await conn.sendMessage(mek.chat, { react: { text: "❌", key: mek.key } });
-                        }
-                    } catch (reactError) {
-                        console.error('Failed to send error reaction:', reactError);
-                    }
-                }
-            };
-
-            conn.ev.on('messages.upsert', messageListener);
-
-        } catch (error) {
-            console.error('Error:', error);
-            try {
-                if (mek?.key?.id) {
-                    await conn.sendMessage(mek.chat, { react: { text: "❌", key: mek.key } });
-                }
-            } catch (reactError) {
-                console.error('Failed to send error reaction:', reactError);
-            }
-            reply('🎵 Error: ' + (error.message || 'Please try again later'));
-        }
+// Get Bot Version
+async function getBotVersion() {
+    try {
+        if (!config.REPO) return 'Ultimate';
+        const rawUrl = config.REPO.replace('github.com', 'raw.githubusercontent.com') + '/main/package.json';
+        const { data } = await axios.get(rawUrl);
+        return data.version || 'Ultimate';
+    } catch (err) {
+        console.error("Version error:", err);
+        return 'Ultimate';
     }
-);
+}
 
-/*const { cmd } = require('../command');
-const axios = require('axios');
-const yts = require('yt-search');
-const Config = require('../config');
-
-// Optimized axios
-const axiosInstance = axios.create({
-  timeout: 10000,
-  maxRedirects: 5
-});
-
-cmd(
-    {
-        pattern: 'songo',
-        alias: ['playo', 'music'],
-        desc: 'YouTube audio downloader',
-        category: 'media',
-        react: '⌛',
-        use: '<YouTube URL or search query> [quality]',
-        filename: __filename,
-    },
-    async (conn, mek, m, { text, reply }) => {
-        try {
-            if (!text) return reply('🎵 *Usage:* .song <query/url> [quality]\nExample: .song https://youtu.be/ox4tmEV6-QU\n.song Alan Walker Lily 128');
-
-            let [input, quality = '92'] = text.split(' ');
-            quality = ['92', '128', '256', '320'].includes(quality) ? quality : '92';
-
-            await conn.sendMessage(mek.chat, { react: { text: "⏳", key: mek.key } });
-
-            // Get video URL using yt-search
-            let videoUrl;
-            if (input.match(/youtu\.?be/)) {
-                videoUrl = input;
-            } else {
-                const searchResults = await yts(input);
-                if (!searchResults.videos.length) return reply('🎵 No results found for your search');
-                videoUrl = searchResults.videos[0].url;
-            }
-
-            const apiUrl = `https://mrfrank-api.vercel.app/api/ytmp3dl?url=${encodeURIComponent(videoUrl)}&quality=${quality}`;
-            const apiResponse = await axiosInstance.get(apiUrl);
-            if (!apiResponse.data?.status || !apiResponse.data.download?.url) {
-                return reply('🎵 Failed to fetch audio - API error');
-            }
-
-            const songData = apiResponse.data;
-
-            // Get thumbnail using yt-search for better quality
-            let thumbnailBuffer;
-            try {
-                const videoInfo = await yts({ videoId: songData.metadata.id });
-                const thumbnailUrl = videoInfo.thumbnail;
-                const response = await axiosInstance.get(thumbnailUrl, { responseType: 'arraybuffer' });
-                thumbnailBuffer = Buffer.from(response.data, 'binary');
-            } catch (e) {
-                // Fallback to API thumbnail if yt-search fails
-                try {
-                    const response = await axiosInstance.get(songData.metadata.thumbnail, { responseType: 'arraybuffer' });
-                    thumbnailBuffer = Buffer.from(response.data, 'binary');
-                } catch (e) {
-                    thumbnailBuffer = null;
-                }
-            }
-
-            const songInfo = `🎧 *${songData.metadata.title}*\n` +
-                            `⏱ ${songData.metadata.timestamp} | ${songData.download.quality}\n` +
-                            `👤 ${songData.metadata.author?.name || 'Unknown'}\n` +
-                            `👀 ${songData.metadata.views || 'N/A'} views\n` +
-                            `📅 ${songData.metadata.ago || 'Unknown upload date'}\n\n` +
-                            `🔗 ${songData.url}\n\n` +
-                            `*Reply with:*\n` +
-                            `1 - For Audio Format 🎵\n` +
-                            `2 - For Document Format 📁\n\n` +
-                            `> © ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${Config.BOT_NAME}`;
-
-            const sentMsg = await conn.sendMessage(mek.chat, {
-                image: thumbnailBuffer,
-                caption: songInfo,
-                contextInfo: {
-                    externalAdReply: {
-                        title: songData.metadata.title,
-                        body: `Quality: ${songData.download.quality} | ${songData.metadata.views || 'N/A'} views`,
-                        thumbnail: thumbnailBuffer,
-                        mediaType: 1,
-                        mediaUrl: songData.url,
-                        sourceUrl: songData.url
-                    }
-                }
-            }, { quoted: mek });
-
-            // Timeout after 60 seconds
-            const timeout = setTimeout(() => {
-                conn.ev.off('messages.upsert', messageListener);
-                reply("⌛ Session timed out. Please use the command again if needed.");
-            }, 60000);
-
-            const messageListener = async (messageUpdate) => {
-                try {
-                    const mekInfo = messageUpdate?.messages[0];
-                    if (!mekInfo?.message) return;
-
-                    const messageType = mekInfo?.message?.conversation || mekInfo?.message?.extendedTextMessage?.text;
-                    const isReplyToSentMsg = mekInfo?.message?.extendedTextMessage?.contextInfo?.stanzaId === sentMsg.key.id;
-
-                    if (!isReplyToSentMsg || !['1', '2'].includes(messageType.trim())) return;
-
-                    // Remove listener and timeout
-                    conn.ev.off('messages.upsert', messageListener);
-                    clearTimeout(timeout);
-
-                    const processingMsg = await reply("⏳ Processing your request...");
-                    
-                    const audioResponse = await axiosInstance.get(songData.download.url, {
-                        responseType: 'arraybuffer',
-                        headers: { Referer: 'https://www.youtube.com/' }
-                    });
-                    const audioBuffer = Buffer.from(audioResponse.data, 'binary');
-
-                    if (messageType.trim() === "1") {
-                        await conn.sendMessage(mek.chat, {
-                            audio: audioBuffer,
-                            mimetype: 'audio/mpeg',
-                            fileName: songData.download.filename,
-                            ptt: false,
-                            contextInfo: {
-                                externalAdReply: {
-                                    title: songData.metadata.title,
-                                    body: `🎵 ${Config.BOT_NAME}`,
-                                    thumbnail: thumbnailBuffer,
-                                    mediaType: 1,
-                                    mediaUrl: songData.url,
-                                    sourceUrl: songData.url
-                                }
-                            }
-                        }, { quoted: mek });
-                    } else {
-                        await conn.sendMessage(mek.chat, {
-                            document: audioBuffer,
-                            mimetype: 'audio/mpeg',
-                            fileName: `${songData.metadata.title}.mp3`,
-                            contextInfo: {
-                                externalAdReply: {
-                                    title: `${songData.metadata.title} (YTMP3)`,
-                                    body: `🎵 Sent as document by ${Config.BOT_NAME}`,
-                                    thumbnail: thumbnailBuffer,
-                                    mediaType: 1,
-                                    mediaUrl: songData.url,
-                                    sourceUrl: songData.url
-                                }
-                            }
-                        }, { quoted: mek });
-                    }
-
-                    await conn.sendMessage(mek.chat, { 
-                        text: '✅ Download completed successfully!', 
-                        edit: processingMsg.key 
-                    });
-                    await conn.sendMessage(mek.chat, { react: { text: "✅", key: mek.key } });
-
-                } catch (error) {
-                    console.error('Error in listener:', error);
-                    await reply('🎵 Error processing your request: ' + (error.message || 'Please try again'));
-                }
-            };
-
-            conn.ev.on('messages.upsert', messageListener);
-
-        } catch (error) {
-            console.error('Error:', error);
-            await conn.sendMessage(mek.chat, { react: { text: "❌", key: mek.key } });
-            reply('🎵 Error: ' + (error.message || 'Please try again later'));
+// Generate a section with numbered commands and descriptions
+function generateCommandListSection(categoryName, cmds) {
+    let section = `╭──────────◯\n\n*\`📁 ${categoryName.toUpperCase()}\`*\n`;
+    cmds.forEach((cmd, index) => {
+        if (cmd.pattern) {
+            section += `\n🏮 \`Command ${index + 1}:\` *${config.PREFIX}${cmd.pattern}*\n💡 \`Description:\` \n\n> ➢ \`\`\`${cmd.desc || "No description"}\`\`\`\n\n`;
         }
-    }
-);
-
-*/
-/*const config = require('../config')
-const { cmd, commands } = require('../command')
-const { runtime } = require('../lib/functions')
+    });
+    return section + '\n╰────────────◯\n';
+}
 
 cmd({
-    pattern: "list",
-    alias: ["listcmd", "commands"],
-    desc: "Show all available commands with descriptions",
-    category: "menu",
-    react: "📜",
+    pattern: "listmenu",
+    desc: "Detailed numbered command list",
+    alias: ["commandlist", "helpme", "menulist", "showcmd"],
+    category: "core",
+    react: "📃",
     filename: __filename
-}, async (conn, mek, m, { from, reply }) => {
+}, async (conn, mek, m, { reply, from }) => {
     try {
-        // Count total commands and aliases
-        const totalCommands = Object.keys(commands).length
-        let aliasCount = 0
-        Object.values(commands).forEach(cmd => {
-            if (cmd.alias) aliasCount += cmd.alias.length
-        })
+        await conn.sendPresenceUpdate('composing', from);
 
-        // Get unique categories count
-        const categories = [...new Set(Object.values(commands).map(c => c.category))]
-
-        let menuText = `╭───『 *${config.BOT_NAME} COMMAND LIST* 』───⳹
-│
-│ *🛠️ BOT INFORMATION*
-│ • 🤖 Bot Name: ${config.BOT_NAME}
-│ • 👑 Owner: ${config.OWNER_NAME}
-│ • ⚙️ Prefix: [${config.PREFIX}]
-│ • 🌐 Platform: Heroku
-│ • 📦 Version: 4.0.0
-│ • 🕒 Runtime: ${runtime(process.uptime())}
-│
-│ *📊 COMMAND STATS*
-│ • 📜 Total Commands: ${totalCommands}
-│ • 🔄 Total Aliases: ${aliasCount}
-│ • 🗂️ Categories: ${categories.length}
-│
-╰────────────────⳹\n`
-
-        // Organize commands by category
-        const categorized = {}
-        categories.forEach(cat => {
-            categorized[cat] = Object.values(commands).filter(c => c.category === cat)
-        })
-
-        // Generate menu for each category
-        for (const [category, cmds] of Object.entries(categorized)) {
-            menuText += `╭───『 *${category.toUpperCase()}* 』───⳹
-│ • 📂 Commands: ${cmds.length}
-│ • 🔄 Aliases: ${cmds.reduce((a, c) => a + (c.alias ? c.alias.length : 0), 0)}
-│
-`
-
-            cmds.forEach(c => {
-                menuText += `┃▸📄 COMMAND: .${c.pattern}\n`
-                menuText += `┃▸❕ ${c.desc || 'No description available'}\n`
-                if (c.alias && c.alias.length > 0) {
-                    menuText += `┃▸🔹 Aliases: ${c.alias.map(a => `.${a}`).join(', ')}\n`
-                }
-                if (c.use) {
-                    menuText += `┃▸💡 Usage: ${c.use}\n`
-                }
-                menuText += `│\n`
-            })
-            
-            menuText += `╰────────────────⳹\n`
-        }
-
-        menuText += `\n📝 *Note*: Use ${config.PREFIX}help <command> for detailed help\n`
-        menuText += `> ${config.DESCRIPTION}`
-
-        await conn.sendMessage(
-            from,
-            {
-                image: { url: config.MENU_IMAGE_URL || 'https://files.catbox.moe/7zfdcq.jpg' },
-                caption: menuText,
-                contextInfo: {
-                    mentionedJid: [m.sender],
-                    forwardingScore: 999,
-                    isForwarded: true
-                }
-            },
-            { quoted: mek }
-        )
-
-    } catch (e) {
-        console.error('Command List Error:', e)
-        reply(`❌ Error generating command list: ${e.message}`)
+        const version = await getBotVersion();
+        const botname = "SUBZERO MD";
+        const ownername = "MR FRANK";
+        const ram = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2);
+        const totalMem = Math.round(os.totalmem() / 1024 / 1024);
+        const uptime = runtime(process.uptime());
+        const totalCommands = commands.filter(c => c.pattern).length;
+        const subzerox = {
+  key: {
+    remoteJid: '120363025036063173@g.us',
+    fromMe: false,
+    participant: '0@s.whatsapp.net'
+  },
+  message: {
+    groupInviteMessage: {
+      groupJid: '120363025036063173@g.us',
+      inviteCode: 'ABCD1234',
+      groupName: 'WhatsApp ✅ • Group',
+      caption: 'Subzero Smart Project',
+      jpegThumbnail: null
     }
-})
-*/
+  }
+        }
+        // Filter and group commands
+        const grouped = {};
+        commands.forEach(cmd => {
+            if (!cmd.pattern || cmd.category.toLowerCase() === "menu" || cmd.hideCommand) return;
+            const cat = cmd.category.toUpperCase();
+            if (!grouped[cat]) grouped[cat] = [];
+            grouped[cat].push(cmd);
+        });
+
+        // Generate full menu
+        let commandList = '';
+        Object.keys(grouped).sort().forEach(category => {
+            commandList += generateCommandListSection(category, grouped[category]);
+        });
+
+        const caption = `          \`${botname}-V5\`\n
+*╭──────────◯*
+*│* *⬡ ᴅᴇᴠᴇʟᴏᴘᴇʀ:* ${ownername}
+*│* *⬡ ᴍᴏᴅᴇ:* ${config.MODE}
+*│* *⬡ ᴘʀᴇꜰɪx:* ${config.PREFIX}
+*│* *⬡ ʀᴀᴍ:* ${ram}MB / ${totalMem}MB
+*│* *⬡ ᴜᴘᴛɪᴍᴇ:* ${uptime}
+*│* *⬡ ᴠᴇʀꜱɪᴏɴ:* ${version}
+*│* *⬡ ᴄᴏᴍᴍᴀɴᴅꜱ:* ${totalCommands}
+*╰───────◯*
+
+${readMore}${commandList}
+
+╭──────────────◯
+│ ${config.FOOTER}
+╰──────────────◯
+`.trim();
+
+        const menuImage = config.BOTIMAGE || 'https://i.postimg.cc/XNTmcqZ3/subzero-menu.png';
+
+        await conn.sendMessage(from, {
+            image: { url: menuImage },
+            caption,
+            contextInfo: {
+                mentionedJid: [m.sender],
+                forwardingScore: 999,
+                isForwarded: true,
+                forwardedNewsletterMessageInfo: {
+                    newsletterJid: '120363304325601080@newsletter',
+                    newsletterName: '🏮 SUBZERO-MD-V5 🏮',
+                    serverMessageId: 143
+                }
+            }
+        }, { quoted: subzerox });
+
+    } catch (err) {
+        console.error(err);
+        reply("❌ Error loading menu: " + err.message);
+    }
+});
