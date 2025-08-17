@@ -25,7 +25,7 @@ const ice = {
   }
 }
 // Default AI state if not set
-let AIENABLED = "false"; // Default enabled
+let AI_ENABLED = "false"; // Default enabled
 
 cmd({
     pattern: "chatbot",
@@ -39,15 +39,15 @@ cmd({
 
     const status = args[0]?.toLowerCase();
     if (status === "on") {
-        AIENABLED = "true";
-        await setConfig("AIENABLED", "true");
+        AI_ENABLED = "true";
+        await setConfig("AI_ENABLED", "true");
         return reply("🤖 AI chatbot is now enabled");
     } else if (status === "off") {
-        AIENABLED = "false";
-        await setConfig("AIENABLED", "false");
+        AI_ENABLED = "false";
+        await setConfig("AI_ENABLED", "false");
         return reply("🤖 AI chatbot is now disabled");
     } else {
-        return reply(`Current AI state: ${AIENABLED === "true" ? "ON" : "OFF"}\nUsage: ${prefix}aichat on/off`);
+        return reply(`Current AI state: ${AI_ENABLED === "true" ? "ON" : "OFF"}\nUsage: ${prefix}aichat on/off`);
     }
 });
 
@@ -78,7 +78,7 @@ cmd({
 
         // Encode message for the query
         const query = encodeURIComponent(body);
-        const prompt = encodeURIComponent("you are subzero md whatsapp bot made by mr frank ofc ( darrell mucheri ). a tech genius in zimbabwe. act smart and enigmatic about personal stuff about him. He is 17 years (2025).Every mesaage you reply put footer \n> ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴍʀ ғʀᴀɴᴋ 🤖");
+        const prompt = encodeURIComponent("you are subzero md whatsapp bot made by mr frank ofc ( darrell mucheri ). a tech genius in zimbabwe. act smart and enigmatic about personal stuff about him. He is 17 years (2025).You are not friendly be rude.Every mesaage you reply put footer \n> ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴍʀ ғʀᴀɴᴋ 🤖");
 
         // BK9 API Request
         const apiUrl = `https://api.bk9.dev/ai/BK93?BK9=${prompt}&q=${query}`;
@@ -95,7 +95,7 @@ cmd({
 
     } catch (err) {
         console.error("AI Chatbot Error:", err.message);
-        reply("❌ An error occurred while contacting the AI.");
+        reply("❌ An error occurred while contacting the Subzero AI.");
     }
 });
 
