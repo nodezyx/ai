@@ -1,99 +1,83 @@
 const { cmd } = require('../command');
 const axios = require('axios');
 
-// Configure axios
-const axiosInstance = axios.create({
-  timeout: 20000,
-  maxRedirects: 5
-});
-
-cmd(
-  {
-    pattern: 'xvideo',
-    alias: ['hentai', 'xnxx','xxx'],
-    desc: '🔞 Download 18+ videos from Xvideos',
-    category: 'media',
-    react: '🔞',
-    use: '<search query>',
-    filename: __filename,
-  },
-  async (conn, mek, m, { text, reply }) => {
-    try {
-      // Ensure we have a search term
-      if (!text) {
-        await reply('🔞 *Usage:* .xvideo <search query>\nExample: .xvideo big boobs');
-        return;
-      }
-
-      // Show loading reaction
-      await conn.sendMessage(mek.chat, { react: { text: '⏳', key: mek.key } });
-
-      // Query Dracula Xvideos API
-      const apiUrl = `https://draculazyx-xyzdrac.hf.space/api/Xvideos?q=${encodeURIComponent(text.trim())}`;
-      const { data } = await axiosInstance.get(apiUrl);
-
-      // Check for a valid video
-      if (data.STATUS !== 200 || !data.video?.downloadLink) {
-        await conn.sendMessage(mek.chat, { react: { text: '❌', key: mek.key } });
-        await reply('🔞 No results found or API error');
-        return;
-      }
-
-      const { title, imageUrl, videoUrl, downloadLink } = data.video;
-
-      // Attempt to fetch thumbnail
-      let thumbBuf = null;
-      try {
-        const thumbRes = await axiosInstance.get(imageUrl, { responseType: 'arraybuffer' });
-        thumbBuf = Buffer.from(thumbRes.data);
-      } catch { /* silent thumbnail failure */ }
-
-      // Send thumbnail preview with link
-      await conn.sendMessage(
-        mek.chat,
-        {
-          image: thumbBuf,
-          caption: `🔞 *${title}*\n🔗 ${videoUrl}`,
-          contextInfo: {
-            externalAdReply: {
-              title,
-              body: 'Powered by Dracula API',
-              mediaType: 1,
-              thumbnail: thumbBuf,
-              mediaUrl: videoUrl,
-              sourceUrl: videoUrl
-            }
-          }
-        },
-        { quoted: mek }
-      );
-
-      // Download the video
-      const videoRes = await axiosInstance.get(downloadLink, {
-        responseType: 'arraybuffer',
-        headers: { Referer: 'https://www.xvideos.com/' }
-      });
-      const videoBuf = Buffer.from(videoRes.data);
-
-      // Sanitize filename and send video
-      const safeTitle = title.replace(/[\\/:"*?<>|]/g, '').slice(0, 50) || 'video';
-      await conn.sendMessage(
-        mek.chat,
-        {
-          video: videoBuf,
-          mimetype: 'video/mp4',
-          fileName: `${safeTitle}.mp4`,
-          caption: `📹 ${title}`
-        }
-      );
-
-      // All done!
-      await conn.sendMessage(mek.chat, { react: { text: '✅', key: mek.key } });
-
-    } catch (error) {
-      // React and reply with error message
-      await conn.sendMessage(mek.chat, { react: { text: '❌', key: mek.key } });
-      await reply(`🔞 Error: ${error.message || 'Please try again later'}`);
+cmd({
+  pattern: 'xnxx',
+  alias: ['xnxxdl', 'xnx', 'xn'],
+  use: '🔞 Download 18+ videos from XNXX using GiftedTech API',
+  category: 'download',
+  desc: '.xnxx <xnxx url>',
+  react: '🔞',
+  filename: __filename
+}, async (conn, mek, m, { args, reply }) => {
+  try {
+    const url = args[0];
+    if (!url || !url.includes('xnxx')) {
+      return reply('❌ Please provide a valid XNXX video URL.\n\nExample: `.xnxx https://www.xnxx.health/video...`');
     }
+
+    // React: loading
+    await conn.sendMessage(mek.chat, { react: { text: '⏳', key: mek.key } });
+
+    const api = `https://api.giftedtech.web.id/api/download/xnxxdl?apikey=gifted&url=${encodeURIComponent(url)}`;
+    const { data } = await axios.get(api);
+
+    if (!data || !data.success || !data.result?.files?.high) {
+      await conn.sendMessage(mek.chat, { react: { text: '❌', key: mek.key } });
+      return reply('❌ Failed to fetch video. Please check the URL.');
+    }
+
+    const {
+      title,
+      image,
+      URL,
+      info,
+      files: { high: videoUrl }
+    } = data.result;
+
+    // Download video buffer
+    const videoRes = await axios.get(videoUrl, { responseType: 'arraybuffer' });
+    const videoBuf = Buffer.from(videoRes.data);
+
+    // Try downloading thumbnail
+    let thumbBuf = null;
+    try {
+      const t = await axios.get(image, { responseType: 'arraybuffer' });
+      thumbBuf = Buffer.from(t.data);
+    } catch {}
+
+    // Caption
+    const caption = `🔞 *${title}*\n\n🕒 *Duration Info*: ${info}\n🔗 *Source*: ${URL}`;
+
+    // Send preview image
+    await conn.sendMessage(mek.chat, {
+      image: thumbBuf,
+      caption,
+      contextInfo: {
+        externalAdReply: {
+          title,
+          body: 'SUBZERO MD 🔞 Video Service',
+          thumbnail: thumbBuf,
+          mediaType: 1,
+          sourceUrl: URL,
+          mediaUrl: URL
+        }
+      }
+    }, { quoted: mek });
+
+    // Send video file
+    await conn.sendMessage(mek.chat, {
+      video: videoBuf,
+      mimetype: 'video/mp4',
+      fileName: `${title.replace(/[\\/:"*?<>|]/g, '').slice(0, 50)}.mp4`,
+      caption: `🎥 *${title}*\nProvided by SUBZERO MD`
+    });
+
+    await conn.sendMessage(mek.chat, { react: { text: '✅', key: mek.key } });
+
+  } catch (err) {
+    console.error('XNXXDL Error:', err.message);
+    await conn.sendMessage(mek.chat, { react: { text: '❌', key: mek.key } });
+    await reply('❌ An error occurred while processing your request.');
   }
-);
+});
