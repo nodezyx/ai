@@ -5,32 +5,46 @@ const os = require('os');
 const path = require('path');
 const { cmd } = require('../command');
 
-// Configuration
+// Configuration with fallback options
 const CDN_CONFIG = {
-  BASE_URL: 'https://mrfrankk-cdn.hf.space',
-  API_KEY: 'subzero', // Change this to your preferred key
-  DEFAULT_PATH: 'ice/'
+  PRIMARY_URL: 'https://mrfrankk-cdn.hf.space',
+  FALLBACK_URL: 'https://cdn-mrfrank.onrender.com',
+  API_KEY: 'subzero',
+  DEFAULT_PATH: 'ice/',
+  TIMEOUT: 30000 // 30 seconds timeout
 };
 
-// Helper functions
-function getExtension(mimeType) {
+// Enhanced extension mapping
+function getExtension(mimeType, fileName = '') {
+  // First try to get extension from filename if provided
+  const fileNameExt = path.extname(fileName).toLowerCase();
+  if (fileNameExt) return fileNameExt;
+
+  // Then fall back to mime type mapping
   const extMap = {
     'image/jpeg': '.jpg',
+    'image/jpg': '.jpg',
     'image/png': '.png',
     'image/gif': '.gif',
     'image/webp': '.webp',
-    'video/': '.mp4',
-    'audio/': '.mp3',
+    'video/mp4': '.mp4',
+    'video/quicktime': '.mov',
+    'audio/mpeg': '.mp3',
+    'audio/mp3': '.mp3',
     'application/pdf': '.pdf',
     'application/zip': '.zip',
-    'application/x-zip-compressed': '.zip'
+    'application/x-zip-compressed': '.zip',
+    'application/octet-stream': '.bin'
   };
-  for (const [prefix, ext] of Object.entries(extMap)) {
-    if (mimeType.includes(prefix)) return ext;
+
+  for (const [type, ext] of Object.entries(extMap)) {
+    if (mimeType.includes(type)) return ext;
   }
-  return '.bin';
+
+  return '.dat'; // Final fallback extension
 }
 
+// Helper functions
 function formatBytes(bytes, decimals = 2) {
   if (bytes === 0) return '0 Bytes';
   const k = 1024;
@@ -39,321 +53,113 @@ function formatBytes(bytes, decimals = 2) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(decimals)) + ' ' + sizes[i];
 }
 
-function cleanTempFile(filePath) {
-  if (filePath && fs.existsSync(filePath)) {
+async function uploadToCDN(fileBuffer, fileName, mimeType) {
+  const form = new FormData();
+  form.append('file', fileBuffer, fileName);
+  form.append('path', CDN_CONFIG.DEFAULT_PATH);
+
+  const config = {
+    headers: {
+      ...form.getHeaders(),
+      'X-API-Key': CDN_CONFIG.API_KEY
+    },
+    timeout: CDN_CONFIG.TIMEOUT
+  };
+
+  try {
+    // Try primary CDN first
+    const response = await axios.post(
+      `${CDN_CONFIG.PRIMARY_URL}/upload`,
+      form,
+      config
+    );
+    return response.data;
+  } catch (primaryError) {
+    console.log('Primary CDN failed, trying fallback...', primaryError.message);
+    
+    // Try fallback CDN
     try {
-      fs.unlinkSync(filePath);
-    } catch (err) {
-      console.error('Temp file cleanup failed:', err);
+      const fallbackResponse = await axios.post(
+        `${CDN_CONFIG.FALLBACK_URL}/upload`,
+        form,
+        config
+      );
+      return fallbackResponse.data;
+    } catch (fallbackError) {
+      console.error('Both CDN endpoints failed');
+      throw new Error(`Upload failed: ${fallbackError.message}`);
     }
   }
 }
 
-function formatResponse(title, name, size, path, url) {
-  return `*${title}*\n\n` +
-         `📄 *Name:* ${name}\n` +
-         `📦 *Size:* ${formatBytes(size)}\n` +
-         `📂 *Path:* ${path}\n` +
+function formatResponse(fileName, size, url) {
+  return `*📁 CDN Upload Successful*\n\n` +
+         `🔖 *Filename:* ${fileName}\n` +
+         `📊 *Size:* ${formatBytes(size)}\n` +
          `🔗 *URL:* ${url}\n\n` +
-         `> © Mr Frank OFC - CDN`;
+         `_Powered by Mr Frank CDN_`;
 }
 
-// Command handler
+// Main command handler
 cmd({
     pattern: 'cdn',
-    alias: ['ghupload', 'cdnup'],
-    react: '🔒',
-    desc: 'Secure upload to GitHub CDN',
+    alias: ['upload', 'cdnup'],
+    react: '⬆️',
+    desc: 'Upload files to CDN with custom names',
     category: 'utility',
-    use: '.cdn [filename] (when replying to media)',
+    use: '<.cdn filename> (reply to media)',
     filename: __filename
-}, async (client, message, { args, reply, quoted }) => {
+}, async (m, sock, { args, reply, quoted }) => {
     let tempFilePath;
     try {
-        const mimeType = (quoted?.msg || message.msg).mimetype || '';
+        // Check if we have media to upload
+        const media = quoted ? quoted : m;
+        const mimeType = media.mimetype || '';
         
-        if (!mimeType) throw "Reply to media to upload";
-
-        const mediaBuffer = await (quoted || message).download();
-        tempFilePath = path.join(os.tmpdir(), `cdn_secure_${Date.now()}`);
-        fs.writeFileSync(tempFilePath, mediaBuffer);
-
-        const extension = getExtension(mimeType);
-        
-        // Handle custom filename
-        let fileName;
-        if (args && args.trim().length > 0) {
-            const customName = args.trim().replace(/\s+/g, '_');
-            // Check if custom name already has an extension
-            const hasExtension = customName.includes('.');
-            fileName = hasExtension ? customName : `${customName}${extension}`;
-        } else {
-            fileName = `file_${Date.now()}${extension}`;
+        if (!mimeType) {
+            return await reply('❌ Please reply to a media file (image, video, audio, etc.)');
         }
 
-        const form = new FormData();
-        form.append('file', fs.createReadStream(tempFilePath), fileName);
-        form.append('path', CDN_CONFIG.DEFAULT_PATH);
+        // Download the media
+        const mediaBuffer = await media.download();
+        if (!mediaBuffer || mediaBuffer.length === 0) {
+            throw new Error('Failed to download media');
+        }
 
-        const response = await axios.post(
-            `${CDN_CONFIG.BASE_URL}/upload`, 
-            form, 
-            {
-                headers: {
-                    ...form.getHeaders(),
-                    'X-API-Key': CDN_CONFIG.API_KEY
-                }
-            }
-        );
+        // Generate filename
+        let fileName = '';
+        if (args && args.trim().length > 0) {
+            // Use custom filename but ensure it has proper extension
+            const customName = args.trim().replace(/[^\w.-]/g, '_');
+            const ext = getExtension(mimeType, customName);
+            fileName = customName.endsWith(ext) ? customName : `${customName}${ext}`;
+        } else {
+            // Default filename with timestamp
+            const ext = getExtension(mimeType);
+            fileName = `file_${Date.now()}${ext}`;
+        }
 
-        if (!response.data?.success) throw "Upload failed";
+        // Upload to CDN
+        const uploadResult = await uploadToCDN(mediaBuffer, fileName, mimeType);
         
+        if (!uploadResult || !uploadResult.success) {
+            throw new Error(uploadResult?.message || 'Upload failed without error message');
+        }
+
+        // Send success response
         await reply(formatResponse(
-            'SECURE CDN Upload ✅',
             fileName,
             mediaBuffer.length,
-            CDN_CONFIG.DEFAULT_PATH,
-            response.data.cdnUrl
+            uploadResult.cdnUrl || uploadResult.url
         ));
 
     } catch (error) {
-        console.error('Secure CDN Error:', error);
-        await reply(`❌ Error: ${error.message || error}`);
+        console.error('CDN Upload Error:', error);
+        await reply(`❌ Upload failed: ${error.message}\n\nPlease try again later.`);
     } finally {
-        cleanTempFile(tempFilePath);
-    }
-});   
-
-
-/*const axios = require('axios');
-const FormData = require('form-data');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-const { cmd } = require('../command');
-
-// Configuration
-const CDN_CONFIG = {
-  BASE_URL: 'https://mrfrankk-cdn.hf.space',
-  API_KEY: 'subzero', // Change this to your preferred key
-  DEFAULT_PATH: 'ice/'
-};
-
-// Helper functions
-function getExtension(mimeType) {
-  const extMap = {
-    'image/jpeg': '.jpg',
-    'image/png': '.png',
-    'image/gif': '.gif',
-    'image/webp': '.webp',
-    'video/': '.mp4',
-    'audio/': '.mp3',
-    'application/pdf': '.pdf'
-  };
-  for (const [prefix, ext] of Object.entries(extMap)) {
-    if (mimeType.includes(prefix)) return ext;
-  }
-  return '.bin';
-}
-
-function formatBytes(bytes, decimals = 2) {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(decimals)) + ' ' + sizes[i];
-}
-
-function cleanTempFile(filePath) {
-  if (filePath && fs.existsSync(filePath)) {
-    try {
-      fs.unlinkSync(filePath);
-    } catch (err) {
-      console.error('Temp file cleanup failed:', err);
-    }
-  }
-}
-
-function formatResponse(title, name, size, path, url) {
-  return `*${title}*\n\n` +
-         `📄 *Name:* ${name}\n` +
-         `📦 *Size:* ${formatBytes(size)}\n` +
-         `📂 *Path:* ${path}\n` +
-         `🔗 *URL:* ${url}\n\n` +
-         `> © Mr Frank OFC - CDN`;
-}
-
-// Command handler
-cmd({
-    pattern: 'cdn',
-    alias: ['ghupload', 'cdnup'],
-    react: '🔒',
-    desc: 'Secure upload to GitHub CDN',
-    category: 'utility',
-    use: '.gitcdn [reply to media]',
-    filename: __filename
-}, async (client, message, args, { reply }) => {
-    let tempFilePath;
-    try {
-        const quotedMsg = message.quoted || message;
-        const mimeType = (quotedMsg.msg || quotedMsg).mimetype || '';
-        
-        if (!mimeType) throw "Reply to media to upload";
-
-        const mediaBuffer = await quotedMsg.download();
-        tempFilePath = path.join(os.tmpdir(), `cdn_secure_${Date.now()}`);
-        fs.writeFileSync(tempFilePath, mediaBuffer);
-
-        const extension = getExtension(mimeType);
-        const fileName = `file_${Date.now()}${extension}`;
-
-        const form = new FormData();
-        form.append('file', fs.createReadStream(tempFilePath), fileName);
-        form.append('path', CDN_CONFIG.DEFAULT_PATH);
-
-        const response = await axios.post(
-            `${CDN_CONFIG.BASE_URL}/upload`, 
-            form, 
-            {
-                headers: {
-                    ...form.getHeaders(),
-                    'X-API-Key': CDN_CONFIG.API_KEY
-                }
-            }
-        );
-
-        if (!response.data?.success) throw "Upload failed";
-        
-        await reply(formatResponse(
-            'SECURE CDN Upload ✅',
-            fileName,
-            mediaBuffer.length,
-            CDN_CONFIG.DEFAULT_PATH,
-            response.data.cdnUrl
-        ));
-
-    } catch (error) {
-        console.error('Secure CDN Error:', error);
-        await reply(`❌ Error: ${error.message || error}`);
-    } finally {
-        cleanTempFile(tempFilePath);
+        // Clean up temp file if it exists
+        if (tempFilePath && fs.existsSync(tempFilePath)) {
+            fs.unlinkSync(tempFilePath).catch(() => {});
+        }
     }
 });
-*/
-/*
-const axios = require('axios');
-const FormData = require('form-data');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-const { cmd } = require('../command');
-
-// Configuration
-const CDN_CONFIG = {
-  BASE_URL: 'https://cdn-mrfrank.onrender.com',
-  API_KEY: 'subzero', // Change this to your preferred key
-  DEFAULT_PATH: 'media/'
-};
-
-// Helper functions
-function getExtension(mimeType) {
-  const extMap = {
-    'image/jpeg': '.jpg',
-    'image/png': '.png',
-    'image/gif': '.gif',
-    'image/webp': '.webp',
-    'video/': '.mp4',
-    'audio/': '.mp3',
-    'application/pdf': '.pdf'
-  };
-  for (const [prefix, ext] of Object.entries(extMap)) {
-    if (mimeType.includes(prefix)) return ext;
-  }
-  return '.bin';
-}
-
-function formatBytes(bytes, decimals = 2) {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(decimals)) + ' ' + sizes[i];
-}
-
-function cleanTempFile(filePath) {
-  if (filePath && fs.existsSync(filePath)) {
-    try {
-      fs.unlinkSync(filePath);
-    } catch (err) {
-      console.error('Temp file cleanup failed:', err);
-    }
-  }
-}
-
-function formatResponse(title, name, size, path, url) {
-  return `*${title}*\n\n` +
-         `📄 *Name:* ${name}\n` +
-         `📦 *Size:* ${formatBytes(size)}\n` +
-         `📂 *Path:* ${path}\n` +
-         `🔗 *URL:* ${url}\n\n` +
-         `> © Mr Frank OFC - CDN`;
-}
-
-// Command handler
-cmd({
-    pattern: 'gitcdn',
-    alias: ['ghupload', 'cdnup'],
-    react: '🔒',
-    desc: 'Secure upload to GitHub CDN',
-    category: 'utility',
-    use: '.gitcdn [filename] (when replying to media)',
-    filename: __filename
-}, async (client, message, { args, reply, quoted }) => {
-    let tempFilePath;
-    try {
-        const mimeType = (quoted?.msg || message.msg).mimetype || '';
-        
-        if (!mimeType) throw "Reply to media to upload";
-
-        const mediaBuffer = await (quoted || message).download();
-        tempFilePath = path.join(os.tmpdir(), `cdn_secure_${Date.now()}`);
-        fs.writeFileSync(tempFilePath, mediaBuffer);
-
-        const extension = getExtension(mimeType);
-        // Improved filename handling
-        const customName = typeof args === 'string' ? args.trim().replace(/\s+/g, '_') : `file_${Date.now()}`;
-        const fileName = customName.endsWith(extension) ? customName : `${customName}${extension}`;
-
-        const form = new FormData();
-        form.append('file', fs.createReadStream(tempFilePath), fileName);
-        form.append('path', CDN_CONFIG.DEFAULT_PATH);
-
-        const response = await axios.post(
-            `${CDN_CONFIG.BASE_URL}/upload`, 
-            form, 
-            {
-                headers: {
-                    ...form.getHeaders(),
-                    'X-API-Key': CDN_CONFIG.API_KEY
-                }
-            }
-        );
-
-        if (!response.data?.success) throw "Upload failed";
-        
-        await reply(formatResponse(
-            'SECURE CDN Upload ✅',
-            fileName,
-            mediaBuffer.length,
-            CDN_CONFIG.DEFAULT_PATH,
-            response.data.cdnUrl
-        ));
-
-    } catch (error) {
-        console.error('Secure CDN Error:', error);
-        await reply(`❌ Error: ${error.message || error}`);
-    } finally {
-        cleanTempFile(tempFilePath);
-    }
-});
-*/
