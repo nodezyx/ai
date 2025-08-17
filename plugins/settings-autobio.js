@@ -86,30 +86,30 @@ cmd({
 
     try {
         if (action === 'on') {
-            if (config.AUTO_BIO === "true") {
+            if (config.AUTOBIO === "true") {
                 return reply("ℹ️ Auto-bio is already enabled");
             }
 
             // Update config
-            config.AUTO_BIO = "true";
+            config.AUTOBIO = "true";
             if (customBio) {
                 // Store custom bio in memory only (not in env)
-                config.AUTO_BIO_TEXT = customBio;
+                config.AUTOBIOTEXT = customBio;
             } else {
-                config.AUTO_BIO_TEXT = defaultBio;
+                config.AUTOBIOTEXT = defaultBio;
             }
 
             // Start updating bio
-            startAutoBio(conn, config.AUTO_BIO_TEXT);
+            startAutoBio(conn, config.AUTOBIOTEXT);
             return reply(`✅ Auto-bio enabled\nCurrent text: "${config.AUTO_BIO_TEXT}"`);
 
         } else if (action === 'off') {
-            if (config.AUTO_BIO !== "true") {
+            if (config.AUTOBIO !== "true") {
                 return reply("ℹ️ Auto-bio is already disabled");
             }
             
             // Update config
-            config.AUTO_BIO = "false";
+            config.AUTOBIO = "false";
             
             // Stop updating bio
             stopAutoBio();
@@ -121,8 +121,8 @@ cmd({
                 `${config.PREFIX}autobio off - Disable auto-bio\n\n` +
                 `Available placeholders:\n` +
                 `{time} - Current time\n` +
-                `Current status: ${config.AUTO_BIO === "true" ? 'ON' : 'OFF'}\n` +
-                `Current text: "${config.AUTO_BIO_TEXT || defaultBio}"`);
+                `Current status: ${config.AUTOBIO === "true" ? 'ON' : 'OFF'}\n` +
+                `Current text: "${config.AUTOBIOTEXT || defaultBio}"`);
         }
     } catch (error) {
         console.error('Auto-bio error:', error);
