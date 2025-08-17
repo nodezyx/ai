@@ -38,7 +38,7 @@ async (conn, mek, m, { from, sender, args, reply }) => {
                   `*🔹 Likes:* ${pinData.likes}\n` +
                   `*🔸 Upload Date:* ${pinData.upload}\n\n` +
                   `_Select download option below_`,
-            footer: config.DESCRIPTION,
+            footer: config.FOOTER,
             buttons: [
                 {
                     buttonId: `pin-image-${url}`,
