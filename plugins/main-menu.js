@@ -36,10 +36,10 @@ async function getBotVersion() {
     }
 }
 
-const imageUrl = config.BOT_IMAGE ||  'https://i.postimg.cc/XNTmcqZ3/subzero-menu.png';
+const imageUrl = config.BOTIMAGE ||  'https://i.postimg.cc/XNTmcqZ3/subzero-menu.png';
 
 cmd({
-    pattern: "menu",
+    pattern: "menu2",
     desc: "subzero menu",
     alias: "help",
     category: "menu",
@@ -78,7 +78,7 @@ const subzero = {
 
         let dec = `
 
-       \`\`\`${config.BOT_NAME}\`\`\`
+       \`\`\`${config.BOTNAME}\`\`\`
     
 ⟣──────────────────⟢
 ▧ *ᴄʀᴇᴀᴛᴏʀ* : *ᴍʀ ғʀᴀɴᴋ (🇿🇼)*
