@@ -1,6 +1,6 @@
 const config = require("../config");
 const { cmd } = require("../command");
-const { loadSettings, saveSettings } = require("../lib/antiNewsStorage");
+const { loadSettings, saveSettings } = require("../lib/antinews");
 
 // Load persistent anti‑newsletter settings.
 let antinewsletterSettings = loadSettings();
