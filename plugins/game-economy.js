@@ -155,7 +155,7 @@ cmd({
     amount = Math.floor(user.wallet / 2);
   } else {
     amount = parseInt(amountArg);
-    if (isNaN(amount) return reply("⚠️ Please enter a valid number");
+    if (isNaN(amount)) return reply("⚠️ Please enter a valid number");
   }
   
   // Validate amount
