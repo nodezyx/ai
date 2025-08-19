@@ -9,7 +9,7 @@
     "restart": "pm2 restart SUBZERO-MD"
   },
   "dependencies": {
-   "@whiskeysockets/baileys": "github:XdKing2/bail",
+   "@whiskeysockets/baileys": "github:Hupa11/Asithamdb",
     "axios": "^1.7.9",
     "@adiwajshing/keyed-db": "latest",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
