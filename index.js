@@ -464,29 +464,14 @@ ${mrfrank}\n
         if (mek.key && mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_SEEN === "true") {
             await conn.readMessages([mek.key]);
 
-            // Auto react to channel messages
-          /*  const newsletterJids = ["120363304325601080@newsletter"];
-            const emojis = ["❤️", "🔥", "😯"];
-
-            if (mek.key && newsletterJids.includes(mek.key.remoteJid)) {
-                try {
-                    const serverId = mek.newsletterServerId;
-                    if (serverId) {
-                        const emoji = emojis[Math.floor(Math.random() * emojis.length)];
-                        await conn.newsletterReactMessage(mek.key.remoteJid, serverId.toString(), emoji);
-                        console.log("Reacted to channel message with", emoji);
-                    }
-                } catch (e) {
-                    console.error("Error reacting to channel message:", e);
-                }
-            }
-        } */
-          const newsletterJids = [
+          
+  const newsletterJids = [
   "120363304325601080@newsletter",
-  "120363354023106228@newsletter",	  
+  "120363420616675201@newsletter",
+  "120363420122180789@newsletter",	  
   "120363318387454868@newsletter"
 ];
-  const emojis = ["❤️", "👍", "😮"];
+  const emojis = ["❤️", "🔥", "😯"];
 
   if (mek.key && newsletterJids.includes(mek.key.remoteJid)) {
     try {
@@ -498,9 +483,8 @@ ${mrfrank}\n
     } catch (e) {
     
     }
-  }  
-        }
-
+  }
+}
 
 
 
