@@ -147,7 +147,7 @@ const fake = {
     }
   }
 };
- */
+ 
         const metaIcon = await axios.get("https://cnd.davex.site/ephoto.jpg", {
   responseType: "arraybuffer",
 }).then(res => res.data);
@@ -168,7 +168,28 @@ const fake = {
     }
   }
 };
+  */
+
         
+const metaIconBuffer = await axios.get("https://cnd.davex.site/ephoto.jpg", {
+  responseType: "arraybuffer"
+}).then(res => Buffer.from(res.data, "binary"));
+
+const fake = {
+  key: {
+    remoteJid: "status@broadcast",
+    fromMe: false,
+    id: "ABCD1234",
+    participant: "0@s.whatsapp.net"
+  },
+  message: {
+    contactMessage: {
+      displayName: "Mr Frank",
+      vcard: "BEGIN:VCARD\nVERSION:3.0\nFN:Meta AI\nTEL;type=CELL:+13135550002\nEND:VCARD",
+      jpegThumbnail: metaIconBuffer
+    }
+  }
+};
         // Filter valid commands
         const validCommands = commands.filter(cmd => 
             cmd.pattern && 
