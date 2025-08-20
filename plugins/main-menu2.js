@@ -152,7 +152,7 @@ const fake = {
   responseType: "arraybuffer",
 }).then(res => res.data);
 
-const metaCardQuoted = {
+const fake = {
   key: {
     remoteJid: "status@broadcast",
     fromMe: false,
