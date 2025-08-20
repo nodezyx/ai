@@ -123,7 +123,7 @@ const fake = {
     imageMessage: {
       mimetype: "image/jpeg",
       jpegThumbnail: metaThumbnail,
-      caption: "Meta AI ✅ • Status\n👤 Contact: Mr Frank"
+      caption: "👤 Contact: Mr Frank"
     }
   }
 };
