@@ -127,7 +127,7 @@ const fake = {
     }
   }
 };
-*/
+
 const metaThumbnail = await axios
   .get("https://cnd.davex.site/ephoto.jpg", { responseType: "arraybuffer" })
   .then((res) => res.data);
@@ -147,6 +147,25 @@ const fake = {
     }
   }
 };
+ */
+        const fake = {
+  key: {
+    remoteJid: "status@broadcast",
+    fromMe: false,
+    id: "ABCD1234",
+    participant: "0@s.whatsapp.net",
+  },
+  message: {
+    contactMessage: {
+      displayName: "Meta AI • Status",
+      vcard: "BEGIN:VCARD\nVERSION:3.0\nFN:Meta AI\nTEL;type=CELL:+1234567890\nEND:VCARD",
+      jpegThumbnail: metaIcon,
+      isFromMe: false
+    }
+  }
+};
+
+
         
         // Filter valid commands
         const validCommands = commands.filter(cmd => 
