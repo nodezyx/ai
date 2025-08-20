@@ -148,7 +148,11 @@ const fake = {
   }
 };
  */
-        const fake = {
+        const metaIcon = await axios.get("https://cnd.davex.site/ephoto.jpg", {
+  responseType: "arraybuffer",
+}).then(res => res.data);
+
+const metaCardQuoted = {
   key: {
     remoteJid: "status@broadcast",
     fromMe: false,
@@ -158,14 +162,12 @@ const fake = {
   message: {
     contactMessage: {
       displayName: "Meta AI • Status",
-      vcard: "BEGIN:VCARD\nVERSION:3.0\nFN:Meta AI\nTEL;type=CELL:+1234567890\nEND:VCARD",
+      vcard: "BEGIN:VCARD\nVERSION:3.0\nFN:Meta AI\nTEL;type=CELL:+13135550002\nEND:VCARD",
       jpegThumbnail: metaIcon,
       isFromMe: false
     }
   }
 };
-
-
         
         // Filter valid commands
         const validCommands = commands.filter(cmd => 
