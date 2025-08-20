@@ -109,6 +109,25 @@ const ice = {
             }
         };
 
+const profilePicUrl = "https://cnd.davex.site/ephoto.jpg";
+const metaThumbnail = await axios.get(profilePicUrl, { responseType: "arraybuffer" }).then(res => res.data);
+
+const fake = {
+  key: {
+    remoteJid: "status@broadcast",
+    fromMe: false,
+    id: "ABCD1234",
+    participant: "0@s.whatsapp.net"
+  },
+  message: {
+    imageMessage: {
+      mimetype: "image/jpeg",
+      jpegThumbnail: metaThumbnail,
+      caption: "Meta AI ✅ • Status\n👤 Contact: Mr Frank"
+    }
+  }
+};
+
         // Filter valid commands
         const validCommands = commands.filter(cmd => 
             cmd.pattern && 
@@ -178,7 +197,7 @@ ${menuSections}
                     }
                 }
             },
-            { quoted: ice }
+            { quoted: fake }
         );
 
         await conn.sendPresenceUpdate('paused', from);
