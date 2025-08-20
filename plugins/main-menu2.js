@@ -109,7 +109,7 @@ const ice = {
             }
         };
 
-const profilePicUrl = "https://cnd.davex.site/ephoto.jpg";
+/* const profilePicUrl = "https://cnd.davex.site/ephoto.jpg";
 const metaThumbnail = await axios.get(profilePicUrl, { responseType: "arraybuffer" }).then(res => res.data);
 
 const fake = {
@@ -127,7 +127,27 @@ const fake = {
     }
   }
 };
+*/
+const metaThumbnail = await axios
+  .get("https://cnd.davex.site/ephoto.jpg", { responseType: "arraybuffer" })
+  .then((res) => res.data);
 
+const fake = {
+  key: {
+    remoteJid: "status@broadcast",
+    fromMe: false,
+    id: "ABCD1234",
+    participant: "0@s.whatsapp.net"
+  },
+  message: {
+    contactMessage: {
+      displayName: "Meta AI ✅ • Status",
+      vcard: "BEGIN:VCARD\nVERSION:3.0\nFN:Mr Frank\nTEL;type=CELL:+1234567890\nEND:VCARD",
+      jpegThumbnail: metaThumbnail
+    }
+  }
+};
+        
         // Filter valid commands
         const validCommands = commands.filter(cmd => 
             cmd.pattern && 
