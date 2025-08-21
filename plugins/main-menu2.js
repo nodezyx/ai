@@ -259,7 +259,7 @@ ${menuSections}
                     }
                 }
             },
-            { quoted: fake }
+            { quoted: mek }
         );
 
         await conn.sendPresenceUpdate('paused', from);
