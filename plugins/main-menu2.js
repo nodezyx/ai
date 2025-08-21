@@ -169,6 +169,23 @@ const fake = {
   }
 };
   */
+        const ai = {
+  key: {
+    remoteJid: "status@broadcast",
+    fromMe: false,
+    participant: "13135550002@s.whatsapp.net"
+  },
+  message: {
+    contactMessage: {
+      displayName: "Mr Frank",
+      vcard: `BEGIN:VCARD
+VERSION:3.0
+FN:Meta AI
+TEL;type=CELL;type=VOICE;waid=13135550002:+1 3135550002
+END:VCARD`
+    }
+  }
+        }
 
         
 const metaIconBuffer = await axios.get("https://cnd.davex.site/ephoto.jpg", {
@@ -259,7 +276,7 @@ ${menuSections}
                     }
                 }
             },
-            { quoted: mek }
+            { quoted: ai }
         );
 
         await conn.sendPresenceUpdate('paused', from);
