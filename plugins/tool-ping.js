@@ -1,3 +1,26 @@
+/*const config = require('../config');
+const { cmd } = require('../command');
+const moment = require('moment-timezone');
+
+// Quoted message style
+const subzero = {
+  key: {
+    remoteJid: '120363025036063173@g.us',
+    fromMe: false,
+    participant: '0@s.whatsapp.net'
+  },
+  message: {
+    groupInviteMessage: {
+      groupJid: '120363025036063173@g.us',
+      inviteCode: 'ABCD1234',
+      groupName: 'WhatsApp ✅ • Group',
+      caption: 'Subzero Smart Automation',
+      jpegThumbnail: null
+    }
+  }
+};
+*/
+// Subzero quoted style:
 const config = require('../config');
 const { cmd } = require('../command');
 const moment = require('moment-timezone');
@@ -20,6 +43,50 @@ const subzero = {
   }
 };
 
+cmd({
+  pattern: "ping",
+  alias: ["speed", "pong"],
+  desc: "Check bot's response time",
+  category: "core",
+  react: "⚡",
+  filename: __filename
+}, async (conn, mek, m, { from }) => {
+  try {
+    const start = Date.now();
+    // Send initial message with Subzero quoted style
+    await conn.sendMessage(from, {
+      text: "```Testing latency...⌛️```",
+      contextInfo: {
+        quotedMessage: subzero.message,
+        mentionedJid: [mek.sender],
+        forwardingScore: 999,
+        isForwarded: true
+      }
+    });
+    const speed = Date.now() - start;
+    // Send result with Subzero quoted style
+    await conn.sendMessage(from, {
+      text: `\`\`\`Pong ${speed}ms\`\`\``,
+      contextInfo: {
+        quotedMessage: subzero.message,
+        mentionedJid: [mek.sender],
+        forwardingScore: 999,
+        isForwarded: true
+      }
+    });
+  } catch (e) {
+    console.error("Ping command error:", e);
+    await conn.sendMessage(from, {
+      text: `❌ Error: ${e.message}`,
+      contextInfo: {
+        quotedMessage: subzero.message,
+        mentionedJid: [mek.sender],
+        forwardingScore: 999,
+        isForwarded: true
+      }
+    });
+  }
+});
 
 cmd({
   pattern: "ping",
