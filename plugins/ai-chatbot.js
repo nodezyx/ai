@@ -24,6 +24,25 @@ const ice = {
     }
   }
 }
+
+const ai = {
+  key: {
+    remoteJid: "status@broadcast",   // Where the message appears
+    fromMe: false,                   // Sent by you? false
+    participant: "13135550002@s.whatsapp.net" // Fake participant ID
+  },
+  message: {
+    contactMessage: {
+      displayName: "Mr Frank",
+      vcard: `BEGIN:VCARD
+VERSION:3.0
+FN:Meta AI
+TEL;type=CELL;type=VOICE;waid=13135550002:+1 3135550002
+END:VCARD`
+    }
+  }
+};
+
 // Default AI state if not set
 let AI_ENABLED = "false"; // Default enabled
 
@@ -88,7 +107,7 @@ cmd({
         if (data && data.status && data.BK9) {
             await conn.sendMessage(from, {
                 text: data.BK9
-            }, { quoted: ice });
+            }, { quoted: ai });
         } else {
             reply("⚠️ Subzero AI failed to generate a response.");
         }
