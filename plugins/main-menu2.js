@@ -177,7 +177,7 @@ const ai = {
   },
   message: {
     contactMessage: {
-      displayName: "DaveTech",
+      displayName: "Mr Frank",
       vcard: `BEGIN:VCARD
 VERSION:3.0
 FN:Meta AI
