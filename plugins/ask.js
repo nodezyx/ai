@@ -3,20 +3,9 @@ const FormData = require('form-data');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const crypto = require('crypto');
 
-// Global AI state (from your previous code)
-let AI_ENABLED = "false";
-
-// Initialize AI state
-(async () => {
-    try {
-        const savedState = await getConfig("AI_ENABLED");
-        if (savedState) AI_ENABLED = savedState;
-    } catch (error) {
-        console.error("Error loading AI config:", error);
-    }
-})();
+// Remove the problematic initialization and use a simple variable
+let AI_ENABLED = "true"; // Default to enabled
 
 // Helper function to upload to Catbox
 async function uploadToCatbox(imageBuffer, mimeType) {
@@ -55,11 +44,11 @@ cmd({
     category: "AI",
     react: "🤖",
     filename: __filename
-}, async (conn, mek, m, { from, sender, body, args, reply, quoted }) => {
+}, async (conn, mek, m, { from, sender, body, args, reply, quoted, isOwner }) => {
     try {
-        // Check if AI is globally disabled
-        if (AI_ENABLED !== "true") {
-            return reply("🤖 AI chatbot is currently disabled. Use `.chatbot on` to enable it.");
+        // Simple AI toggle check - you can remove this if you want it always on
+        if (AI_ENABLED !== "true" && !isOwner) {
+            return reply("🤖 AI chatbot is currently disabled.");
         }
 
         const isImageAnalysis = quoted && quoted.mimeType && quoted.mimeType.includes('image');
@@ -85,12 +74,14 @@ cmd({
                 imageUrl = await uploadToCatbox(mediaBuffer, quoted.mimeType);
                 
                 if (!imageUrl) {
+                    await conn.sendMessage(from, { delete: processingMsg.key });
                     return reply("❌ Failed to upload image for analysis");
                 }
                 
                 await conn.sendMessage(from, { delete: processingMsg.key });
             } catch (error) {
                 console.error("Image processing error:", error);
+                await conn.sendMessage(from, { delete: processingMsg.key });
                 return reply("❌ Error processing image. Please try again.");
             }
         }
@@ -137,7 +128,30 @@ cmd({
     }
 });
 
-// Optional: Add automatic AI responses (like your previous chatbot)
+// Optional: Simple toggle command since getConfig isn't available
+cmd({
+    pattern: "aichat",
+    alias: ["aitoggle"],
+    desc: "Toggle AI chatbot on/off",
+    category: "settings",
+    react: "⚡",
+    filename: __filename
+}, async (conn, mek, m, { from, args, reply, isOwner }) => {
+    if (!isOwner) return reply("*📛 Only the owner can use this command!*");
+
+    const status = args[0]?.toLowerCase();
+    if (status === "on") {
+        AI_ENABLED = "true";
+        return reply("🤖 AI chatbot is now *ENABLED*");
+    } else if (status === "off") {
+        AI_ENABLED = "false";
+        return reply("🤖 AI chatbot is now *DISABLED*");
+    } else {
+        return reply(`🤖 AI chatbot is currently: *${AI_ENABLED === "true" ? "ENABLED" : "DISABLED"}*`);
+    }
+});
+
+// Optional: Add automatic AI responses
 cmd({
     on: "text"
 }, async (conn, m, store, { from, body, sender, isGroup, reply }) => {
@@ -145,10 +159,8 @@ cmd({
         if (AI_ENABLED !== "true") return;
         if (!body || m.key.fromMe || body.startsWith(config.PREFIX || ".")) return;
         
-        // Only respond in private chats or when mentioned in groups
-        if (isGroup && !body.includes('@' + (conn.user.id.split(':')[0]))) {
-            return;
-        }
+        // Only respond in private chats for auto-responses to avoid spam
+        if (isGroup) return;
 
         const userId = sender.split('@')[0];
         const apiUrl = `https://kaiz-apis.gleeze.com/api/gemini-flash-2.0?q=${encodeURIComponent(body)}&uid=${userId}&apikey=cf2ca612-296f-45ba-abbc-473f18f991eb`;
