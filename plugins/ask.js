@@ -4,16 +4,13 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-// Import the command handler - adjust the path as needed for your project
-const { cmd } = require('../command'); // or whatever the correct path is
+const { cmd } = require('../command');
 
-// Simple AI state variable
 let AI_ENABLED = "true";
 
 // Helper function to upload to Catbox
 async function uploadToCatbox(imageBuffer, mimeType) {
     try {
-        // Get file extension
         let extension = '.jpg';
         if (mimeType.includes('image/png')) extension = '.png';
         if (mimeType.includes('image/gif')) extension = '.gif';
@@ -40,7 +37,6 @@ async function uploadToCatbox(imageBuffer, mimeType) {
     }
 }
 
-// Gemini command
 cmd({
     pattern: "gemini",
     alias: ["ai", "googleai", "ask"],
@@ -87,37 +83,67 @@ cmd({
             }
         }
 
-        const thinkingMsg = await reply(
-            `🤖 *Gemini is thinking...*${imageUrl ? " (with image)" : ""}`
-        );
+        const thinkingMsg = await reply(`🤖 *Gemini is thinking...*${imageUrl ? " (with image)" : ""}`);
 
         try {
             const userId = sender.split('@')[0];
-            const apiUrl = `https://kaiz-apis.gleeze.com/api/gemini-flash-2.0?q=${encodeURIComponent(question || "Describe this image")}&uid=${userId}&imageUrl=${encodeURIComponent(imageUrl || '')}&apikey=cf2ca612-296f-45ba-abbc-473f18f991eb`;
             
-            const response = await axios.get(apiUrl, { timeout: 45000 });
+            // Build the API URL correctly
+            const baseUrl = "https://kaiz-apis.gleeze.com/api/gemini-flash-2.0";
+            const params = new URLSearchParams();
             
+            params.append('q', question || "Describe this image");
+            params.append('uid', userId);
+            if (imageUrl) params.append('imageUrl', imageUrl);
+            params.append('apikey', 'cf2ca612-296f-45ba-abbc-473f18f991eb');
+            
+            const apiUrl = `${baseUrl}?${params.toString()}`;
+            
+            console.log("API URL:", apiUrl); // Debug log
+
+            const response = await axios.get(apiUrl, { 
+                timeout: 45000,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept': 'application/json'
+                }
+            });
+            
+            console.log("API Response:", response.data); // Debug log
+
             if (response.data && response.data.response) {
                 await conn.sendMessage(from, { delete: thinkingMsg.key });
+                
+                // Format the response nicely
+                const aiResponse = response.data.response;
                 await reply(
-                    `✨ *Gemini Response:*\n\n` +
-                    `${response.data.response}\n\n` +
+                    `✨ *Gemini Flash 2.0 Response:*\n\n` +
+                    `${aiResponse}\n\n` +
                     `_🔮 Powered by Subzero MD_`
                 );
             } else {
                 await conn.sendMessage(from, { delete: thinkingMsg.key });
-                reply("❌ No response from AI");
+                reply("❌ No response from AI. Please try again.");
             }
 
         } catch (error) {
-            console.error("API error:", error);
+            console.error("API error details:", error.response?.data || error.message);
             await conn.sendMessage(from, { delete: thinkingMsg.key });
-            reply("❌ Error connecting to AI");
+            
+            if (error.code === 'ECONNABORTED') {
+                reply("❌ Request timeout. Please try again.");
+            } else if (error.response?.status === 404) {
+                reply("❌ API endpoint not found. Please check the URL.");
+            } else if (error.response?.status === 401) {
+                reply("❌ Invalid API key. Please check the configuration.");
+            } else {
+                reply("❌ Error connecting to AI service. Please try again later.");
+            }
         }
 
     } catch (error) {
         console.error("Command error:", error);
-        reply("❌ An error occurred");
+        reply("❌ An unexpected error occurred.");
     }
 });
 
@@ -143,14 +169,3 @@ cmd({
         return reply(`🤖 AI: ${AI_ENABLED === "true" ? "ON" : "OFF"}`);
     }
 });
-
-// If you still get cmd error, try this alternative approach:
-// module.exports = {
-//     name: "gemini",
-//     alias: ["ai", "googleai", "ask"],
-//     desc: "Interact with Gemini AI",
-//     category: "AI",
-//     async exec(conn, mek, m, args, from, sender, reply, quoted, isOwner) {
-//         // Same code as above but adjust function signature
-//     }
-// };
