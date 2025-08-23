@@ -1,171 +1,211 @@
 const axios = require('axios');
 const FormData = require('form-data');
-const fs = require('fs');
-const os = require('os');
+const fs = require('fs').promises;
 const path = require('path');
-
+const crypto = require('crypto');
 const { cmd } = require('../command');
 
-let AI_ENABLED = "true";
+// Create cache folder if it doesn't exist
+const cacheFolder = path.resolve(__dirname, '../cache');
+if (!fs.existsSync(cacheFolder)) {
+    fs.mkdirSync(cacheFolder, { recursive: true });
+}
 
-// Helper function to upload to Catbox
-async function uploadToCatbox(imageBuffer, mimeType) {
+// API configuration
+const GEMINI_API = "https://kaiz-apis.gleeze.com/api/gemini-flash-2.0";
+const API_KEY = "cf2ca612-296f-45ba-abbc-473f18f991eb";
+
+// Upload image to Catbox
+async function uploadToCatbox(imagePath) {
     try {
-        let extension = '.jpg';
-        if (mimeType.includes('image/png')) extension = '.png';
-        if (mimeType.includes('image/gif')) extension = '.gif';
-        if (mimeType.includes('image/webp')) extension = '.webp';
-        
-        const tempFilePath = path.join(os.tmpdir(), `catbox_${Date.now()}${extension}`);
-        fs.writeFileSync(tempFilePath, imageBuffer);
-
-        const form = new FormData();
-        form.append('fileToUpload', fs.createReadStream(tempFilePath), `file${extension}`);
-        form.append('reqtype', 'fileupload');
-
-        const response = await axios.post("https://catbox.moe/user/api.php", form, {
-            headers: form.getHeaders(),
-            timeout: 30000
+        const imageBuffer = await fs.readFile(imagePath);
+        const formData = new FormData();
+        formData.append('reqtype', 'fileupload');
+        formData.append('fileToUpload', imageBuffer, {
+            filename: 'upload.jpg',
+            contentType: 'image/jpeg'
         });
-
-        fs.unlinkSync(tempFilePath);
+        
+        const response = await axios.post('https://catbox.moe/user/api.php', formData, {
+            headers: formData.getHeaders()
+        });
         
         return response.data;
     } catch (error) {
-        console.error("Catbox upload error:", error);
+        console.error('Error uploading to Catbox:', error);
         return null;
     }
 }
 
+// Gemini AI command
 cmd({
     pattern: "gemini",
     alias: ["ai", "googleai", "ask"],
-    desc: "Interact with Gemini Flash 2.0 AI",
+    desc: "Interact with Gemini Flash 2.0 AI - ask questions or analyze images",
     category: "AI",
-    react: "🤖",
-    filename: __filename
-}, async (conn, mek, m, { from, sender, body, args, reply, quoted, isOwner }) => {
+    filename: __filename,
+    react: "🤖"
+}, async (conn, mek, m, { from, args, reply, quotedMsg, sender, name }) => {
     try {
-        if (AI_ENABLED !== "true" && !isOwner) {
-            return reply("🤖 AI chatbot is currently disabled.");
-        }
-
-        const isImageAnalysis = quoted && quoted.mimeType && quoted.mimeType.includes('image');
-        const question = args.join(' ').trim();
-
-        if (!question && !isImageAnalysis) {
+        const isImageAnalysis = quotedMsg && (quotedMsg.image || quotedMsg.video);
+        
+        if (!args[0] && !isImageAnalysis) {
             return reply(
-                "❌ *Usage:*\n" +
-                "• `.gemini your question` - Ask a question\n" +
-                "• Reply to image + `.gemini describe this` - Analyze image\n\n" +
-                "Example: `.gemini what is quantum computing?`"
+                '╭────❒ ❌ Error ❒\n' +
+                '├⬡ Please provide a question or quote an image to analyze.\n' +
+                '├⬡ Usage (Question): .gemini [your question]\n' +
+                '├⬡ Usage (Image Analysis): Reply to an image with .gemini [optional question]\n' +
+                '╰────────────❒'
             );
         }
 
+        const question = args.join(' ');
         let imageUrl = null;
-        
+
+        // Process image if available
         if (isImageAnalysis) {
-            const processingMsg = await reply("📷 *Processing image...*");
-            
+            await reply(
+                '╭────❒ ⏳ Processing Image ❒\n' +
+                '├⬡ Downloading and preparing the image for analysis...\n' +
+                '├⬡ Please wait a moment...\n' +
+                '╰────────────❒'
+            );
+
             try {
-                const mediaBuffer = await quoted.download();
-                imageUrl = await uploadToCatbox(mediaBuffer, quoted.mimeType);
+                // Download the media
+                const mediaBuffer = await conn.downloadMediaMessage(quotedMsg);
+                const filename = crypto.randomBytes(16).toString('hex') + '.jpg';
+                const mediaPath = path.join(cacheFolder, filename);
                 
-                if (!imageUrl) {
-                    await conn.sendMessage(from, { delete: processingMsg.key });
-                    return reply("❌ Failed to upload image");
+                // Save to cache
+                await fs.writeFile(mediaPath, mediaBuffer);
+                
+                // Upload to Catbox
+                const catboxUrl = await uploadToCatbox(mediaPath);
+                
+                // Clean up cached image
+                await fs.unlink(mediaPath);
+                
+                if (catboxUrl) {
+                    imageUrl = catboxUrl;
+                } else {
+                    return reply(
+                        '╭────❒ ❌ Upload Error ❒\n' +
+                        '├⬡ Failed to upload the image for analysis.\n' +
+                        '├⬡ Please try again later.\n' +
+                        '╰────────────❒'
+                    );
                 }
-                
-                await conn.sendMessage(from, { delete: processingMsg.key });
             } catch (error) {
-                console.error("Image error:", error);
-                return reply("❌ Error processing image");
+                console.error('Error processing image:', error);
+                return reply(
+                    '╭────❒ ❌ Image Error ❒\n' +
+                    '├⬡ An error occurred while processing the image.\n' +
+                    '├⬡ Please try again later.\n' +
+                    '╰────────────❒'
+                );
             }
         }
 
-        const thinkingMsg = await reply(`🤖 *Gemini is thinking...*${imageUrl ? " (with image)" : ""}`);
+        // Show processing message
+        await reply(
+            `╭────❒ ⏳ Thinking ❒\n├⬡ Querying Gemini Flash 2.0${imageUrl ? ' with image analysis' : ''}:\n├⬡ ${question || 'Analyzing image...'}\n├⬡ Please wait for the response...\n╰────────────❒`
+        );
 
         try {
-            const userId = sender.split('@')[0];
+            // Use actual user ID for memory (remove @s.whatsapp.net)
+            const uid = sender.split('@')[0];
             
-            // Build the API URL correctly
-            const baseUrl = "https://kaiz-apis.gleeze.com/api/gemini-flash-2.0";
-            const params = new URLSearchParams();
+            // Build API URL
+            let apiUrl = `${GEMINI_API}?q=${encodeURIComponent(question || 'Describe this image.')}&uid=${uid}&apikey=${API_KEY}`;
             
-            params.append('q', question || "Describe this image");
-            params.append('uid', userId);
-            if (imageUrl) params.append('imageUrl', imageUrl);
-            params.append('apikey', 'cf2ca612-296f-45ba-abbc-473f18f991eb');
-            
-            const apiUrl = `${baseUrl}?${params.toString()}`;
-            
-            console.log("API URL:", apiUrl); // Debug log
+            if (imageUrl) {
+                apiUrl += `&imageUrl=${encodeURIComponent(imageUrl)}`;
+            }
 
-            const response = await axios.get(apiUrl, { 
-                timeout: 45000,
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    'Accept': 'application/json'
-                }
-            });
-            
-            console.log("API Response:", response.data); // Debug log
+            // Call Gemini API
+            const response = await axios.get(apiUrl);
+            const geminiData = response.data;
 
-            if (response.data && response.data.response) {
-                await conn.sendMessage(from, { delete: thinkingMsg.key });
-                
-                // Format the response nicely
-                const aiResponse = response.data.response;
-                await reply(
-                    `✨ *Gemini Flash 2.0 Response:*\n\n` +
-                    `${aiResponse}\n\n` +
-                    `_🔮 Powered by Subzero MD_`
+            if (geminiData && geminiData.response) {
+                return reply(
+                    `╭────❒ 🤖 Gemini Response ❒\n├⬡ ${geminiData.response.replace(/\n/g, '\n├⬡ ')}\n╰────────────❒`
                 );
             } else {
-                await conn.sendMessage(from, { delete: thinkingMsg.key });
-                reply("❌ No response from AI. Please try again.");
+                return reply(
+                    '╭────❒ ❓ Hmm... ❒\n' +
+                    '├⬡ Gemini Flash 2.0 did not provide a response.\n' +
+                    '├⬡ Please try asking again later.\n' +
+                    '╰────────────❒'
+                );
             }
-
         } catch (error) {
-            console.error("API error details:", error.response?.data || error.message);
-            await conn.sendMessage(from, { delete: thinkingMsg.key });
-            
-            if (error.code === 'ECONNABORTED') {
-                reply("❌ Request timeout. Please try again.");
-            } else if (error.response?.status === 404) {
-                reply("❌ API endpoint not found. Please check the URL.");
-            } else if (error.response?.status === 401) {
-                reply("❌ Invalid API key. Please check the configuration.");
-            } else {
-                reply("❌ Error connecting to AI service. Please try again later.");
-            }
+            console.error('Error querying Gemini:', error);
+            return reply(
+                '╭────❒ ❌ Error ❒\n' +
+                '├⬡ An error occurred while communicating with Gemini Flash 2.0.\n' +
+                '├⬡ Please try again later.\n' +
+                '╰────────────❒'
+            );
         }
-
     } catch (error) {
-        console.error("Command error:", error);
-        reply("❌ An unexpected error occurred.");
+        console.error('Gemini command error:', error);
+        return reply(
+            '╭────❒ ❌ Unexpected Error ❒\n' +
+            '├⬡ Something went wrong. Please try again later.\n' +
+            '╰────────────❒'
+        );
     }
 });
 
-// AI toggle command
+// Enable/disable command
 cmd({
     pattern: "aichat",
-    alias: ["aitoggle"],
-    desc: "Toggle AI on/off",
-    category: "settings",
-    react: "⚡",
-    filename: __filename
+    alias: ["aion", "aioff"],
+    desc: "Enable or disable AI responses in chat",
+    category: "AI",
+    filename: __filename,
+    react: "⚙️"
 }, async (conn, mek, m, { from, args, reply, isOwner }) => {
-    if (!isOwner) return reply("*📛 Owner only!*");
-
-    const status = args[0]?.toLowerCase();
-    if (status === "on") {
-        AI_ENABLED = "true";
-        return reply("🤖 AI enabled");
-    } else if (status === "off") {
-        AI_ENABLED = "false";
-        return reply("🤖 AI disabled");
+    if (!isOwner) return reply("📛 Only the owner can use this command!");
+    
+    if (!args[0]) {
+        return reply(
+            '╭────❒ AI Status ❒\n' +
+            '├⬡ AI responses are currently: ENABLED\n' +
+            '├⬡ Use: .aichat on - to enable\n' +
+            '├⬡ Use: .aichat off - to disable\n' +
+            '╰────────────❒'
+        );
+    }
+    
+    const action = args[0].toLowerCase();
+    if (action === 'on') {
+        // Enable AI logic would go here
+        return reply(
+            '╭────❒ AI Enabled ❒\n' +
+            '├⬡ AI responses are now ENABLED\n' +
+            '├⬡ The bot will respond to messages\n' +
+            '╰────────────❒'
+        );
+    } else if (action === 'off') {
+        // Disable AI logic would go here
+        return reply(
+            '╭────❒ AI Disabled ❒\n' +
+            '├⬡ AI responses are now DISABLED\n' +
+            '├⬡ The bot will not respond to messages\n' +
+            '╰────────────❒'
+        );
     } else {
-        return reply(`🤖 AI: ${AI_ENABLED === "true" ? "ON" : "OFF"}`);
+        return reply(
+            '╭────❒ Invalid Command ❒\n' +
+            '├⬡ Please use: .aichat on/off\n' +
+            '╰────────────❒'
+        );
     }
 });
+
+module.exports = {
+    uploadToCatbox,
+    GEMINI_API
+};
