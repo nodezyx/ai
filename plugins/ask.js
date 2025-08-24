@@ -2,13 +2,14 @@ const axios = require('axios');
 const FormData = require('form-data');
 const { cmd } = require('../command');
 const { getConfig, setConfig } = require("../lib/configdb");
+const config = require("../config");
 
 // Default AI state
 let AI_ENABLED = "false";
 let AI_GROUPS = "false";
 
 // Initialize AI state on startup
-(async() => {
+(async () => {
     const savedState = await getConfig("AI_ENABLED");
     const savedGroups = await getConfig("AI_GROUPS");
     if (savedState) AI_ENABLED = savedState;
@@ -18,6 +19,25 @@ let AI_GROUPS = "false";
 // API configuration
 const GEMINI_API = "https://kaiz-apis.gleeze.com/api/gemini-vision";
 const API_KEY = "cf2ca612-296f-45ba-abbc-473f18f991eb";
+
+// AI message template
+const ai = {
+  key: {
+    remoteJid: "status@broadcast",
+    fromMe: false,
+    participant: "13135550002@s.whatsapp.net"
+  },
+  message: {
+    contactMessage: {
+      displayName: "Gemini AI",
+      vcard: `BEGIN:VCARD
+VERSION:3.0
+FN:Gemini AI
+TEL;type=CELL;type=VOICE;waid=13135550002:+1 3135550002
+END:VCARD`
+    }
+  }
+};
 
 // Upload image to Catbox
 async function uploadToCatbox(imageBuffer) {
@@ -88,97 +108,45 @@ async function processAIRequest(text, imageBuffer, userId, userName) {
     }
 }
 
-// Interactive chatbot configuration menu
+// Simple chatbot enable/disable command
 cmd({
-  pattern: "chatbot2",
-  alias: ["aichat", "ai", "autobot"],
-  desc: "Interactive menu to configure AI chatbot settings",
-  category: "settings",
-  filename: __filename,
-  react: "🤖"
-}, async (conn, mek, m, {
-  from, isGroup, isAdmins, isBotAdmins, isCreator, reply, isOwner
-}) => {
-  if (!isOwner) return reply("*❌ Only the bot owner can configure chatbot settings!*");
+    pattern: "chatbot2",
+    alias: ["aichat", "subzerobot"],
+    desc: "Enable or disable AI chatbot responses",
+    category: "settings",
+    filename: __filename,
+    react: "✅"
+}, async (conn, mek, m, { from, args, isOwner, reply }) => {
+    if (!isOwner) return reply("*📛 Only the owner can use this command!*");
 
-  const menuText =
-    `> *CHATBOT SETTINGS*\n` +
-    `> Current Status: *${AI_ENABLED === "true" ? "ENABLED" : "DISABLED"}*\n` +
-    `> Group Mode: *${AI_GROUPS === "true" ? "ENABLED" : "DISABLED"}*\n\n` +
-    `*Reply with one of the following:*\n\n` +
-    `1. ✅ Enable in Private Chats\n` +
-    `2. 👥 Enable in Groups\n` +
-    `3. 🌐 Enable Everywhere\n` +
-    `4. ❌ Disable Completely\n\n` +
-    `╭───────────────\n│  🤖 AI CHATBOT SETTINGS\n╰───────────────◆`;
-
-  const sent = await conn.sendMessage(from, {
-    text: menuText
-  }, { quoted: mek });
-
-  const msgId = sent.key.id;
-
-  const handler = async ({ messages }) => {
-    const msg = messages?.[0];
-    if (!msg?.message) return;
-
-    const quotedId = msg.message?.extendedTextMessage?.contextInfo?.stanzaId;
-    if (quotedId !== msgId) return;
-
-    const response =
-      msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
-
-    const options = {
-      "1": { enabled: "true", groups: "false", text: "✅ AI Chatbot has been enabled for private chats only!" },
-      "2": { enabled: AI_ENABLED, groups: "true", text: "✅ AI Chatbot has been enabled for groups!" },
-      "3": { enabled: "true", groups: "true", text: "✅ AI Chatbot has been enabled everywhere!" },
-      "4": { enabled: "false", groups: "false", text: "❌ AI Chatbot has been completely disabled!" }
-    };
-
-    const chosen = options[response.trim()];
-    if (!chosen) {
-      await conn.sendMessage(from, { text: "❌ Invalid option. Reply with 1, 2, 3 or 4." }, { quoted: msg });
-      return;
+    const status = args[0]?.toLowerCase();
+    if (status === "on") {
+        AI_ENABLED = "true";
+        await setConfig("AI_ENABLED", "true");
+        return reply("🤖 AI chatbot is now enabled");
+    } else if (status === "off") {
+        AI_ENABLED = "false";
+        await setConfig("AI_ENABLED", "false");
+        return reply("🤖 AI chatbot is now disabled");
+    } else if (status === "group") {
+        const groupStatus = args[1]?.toLowerCase();
+        if (groupStatus === "on") {
+            AI_GROUPS = "true";
+            await setConfig("AI_GROUPS", "true");
+            return reply("🤖 AI chatbot is now enabled for groups");
+        } else if (groupStatus === "off") {
+            AI_GROUPS = "false";
+            await setConfig("AI_GROUPS", "false");
+            return reply("🤖 AI chatbot is now disabled for groups");
+        } else {
+            return reply(`Group AI state: ${AI_GROUPS === "true" ? "ON" : "OFF"}\nUsage: .chatbot group on/off`);
+        }
+    } else {
+        return reply(`Current AI state: ${AI_ENABLED === "true" ? "ON" : "OFF"}\nGroup AI state: ${AI_GROUPS === "true" ? "ON" : "OFF"}\nUsage: .chatbot on/off/group on/group off`);
     }
-
-    // Update settings
-    AI_ENABLED = chosen.enabled;
-    AI_GROUPS = chosen.groups;
-    
-    await setConfig("AI_ENABLED", chosen.enabled);
-    await setConfig("AI_GROUPS", chosen.groups);
-
-    await conn.sendMessage(from, {
-      text: chosen.text
-    }, { quoted: msg });
-
-    conn.ev.off("messages.upsert", handler);
-  };
-
-  conn.ev.on("messages.upsert", handler);
-  setTimeout(() => conn.ev.off("messages.upsert", handler), 60000); // 1 minute timeout
 });
 
-// AI message template
-const ai = {
-  key: {
-    remoteJid: "status@broadcast",
-    fromMe: false,
-    participant: "13135550002@s.whatsapp.net"
-  },
-  message: {
-    contactMessage: {
-      displayName: "Gemini AI",
-      vcard: `BEGIN:VCARD
-VERSION:3.0
-FN:Gemini AI
-TEL;type=CELL;type=VOICE;waid=13135550002:+1 3135550002
-END:VCARD`
-    }
-  }
-};
-
-// Auto-reply AI handler - Using "on: body" like in your example
+// AI Chatbot - Auto reply to messages
 cmd({
     on: "body"
 }, async (conn, m, store, {
@@ -193,80 +161,33 @@ cmd({
     try {
         // Check if AI is disabled
         if (AI_ENABLED !== "true") return;
-        
+
         // Skip if it's a group and group AI is disabled
         if (isGroup && AI_GROUPS !== "true") return;
-        
-        // Ignore commands and messages starting with prefixes
-        if (!body || body.startsWith('.') || body.startsWith('!') || body.startsWith('/') || 
-            body.startsWith('#') || body.startsWith('\\') || body.startsWith('@')) return;
-            
+
+        // Prevent bot responding to its own messages or commands
+        if (!body || m.key.fromMe || body.startsWith(config.PREFIX)) return;
+
         // Ignore very short messages
-        if (body.length < 3) return;
-        
-        // Prevent bot from responding to its own messages
-        if (m.key.fromMe) return;
-        
+        if (body.length < 2) return;
+
         // Get user ID
         const userId = sender.split('@')[0];
-        
-        // Show typing indicator
-        await conn.sendPresenceUpdate('composing', from);
-        
+
         // Process the request
         const aiResponse = await processAIRequest(body, null, userId, sender.split('@')[0]);
-        
+
         // Send response with AI template
         await conn.sendMessage(from, {
-            text: `🤖 ${aiResponse}`
+            text: aiResponse
         }, { quoted: ai });
-        
-    } catch (error) {
-        console.error('Auto-reply text error:', error);
-        // Don't reply on error to avoid spam
+
+    } catch (err) {
+        console.error("AI Chatbot Error:", err.message);
     }
 });
 
-// Manual AI command for specific requests
-cmd({
-    pattern: "ai",
-    alias: ["ask", "gemini"],
-    desc: "Ask the AI a question or analyze an image",
-    category: "AI",
-    filename: __filename,
-    react: "🤖"
-}, async (conn, mek, m, { from, args, reply, quotedMsg, sender, name, isGroup }) => {
-    try {
-        // Check if quoted message has media
-        const hasQuotedMedia = quotedMsg && (quotedMsg.image || quotedMsg.video);
-        const question = args.join(' ') || (hasQuotedMedia ? "Describe this image" : "Hello, how can you help me?");
-        
-        // Get user ID
-        const userId = sender.split('@')[0];
-        
-        let mediaBuffer = null;
-        if (hasQuotedMedia) {
-            await reply("📤 Processing media...");
-            mediaBuffer = await conn.downloadMediaMessage(quotedMsg);
-        }
-        
-        await reply("💭 Thinking...");
-        
-        // Process the request
-        const aiResponse = await processAIRequest(question, mediaBuffer, userId, name);
-        
-        // Send response with AI template
-        await conn.sendMessage(from, {
-            text: `🤖 ${aiResponse}`
-        }, { quoted: ai });
-        
-    } catch (error) {
-        console.error('AI command error:', error);
-        await reply("❌ An error occurred. Please try again later.");
-    }
-});
-
-// Special handler for media messages
+// AI Chatbot - Auto reply to media messages
 cmd({
     on: "media"
 }, async (conn, m, store, {
@@ -281,33 +202,68 @@ cmd({
     try {
         // Check if AI is disabled
         if (AI_ENABLED !== "true") return;
-        
+
         // Skip if it's a group and group AI is disabled
         if (isGroup && AI_GROUPS !== "true") return;
-        
-        // Prevent bot from responding to its own messages
+
+        // Prevent bot responding to its own messages
         if (m.key.fromMe) return;
-        
+
         // Get user ID
         const userId = sender.split('@')[0];
-        
-        // Show typing indicator
-        await conn.sendPresenceUpdate('composing', from);
-        
+
         // Download the media
         const mediaBuffer = await conn.downloadMediaMessage(m);
-        
+
         // Process the request with the image
         const aiResponse = await processAIRequest("Describe this image in detail", mediaBuffer, userId, sender.split('@')[0]);
-        
+
         // Send response with AI template
         await conn.sendMessage(from, {
-            text: `🤖 ${aiResponse}`
+            text: aiResponse
         }, { quoted: ai });
-        
+
+    } catch (err) {
+        console.error("AI Media Chatbot Error:", err.message);
+    }
+});
+
+// Manual AI command for specific requests
+cmd({
+    pattern: "ai",
+    alias: ["ask", "gemini"],
+    desc: "Ask the AI a question or analyze an image",
+    category: "AI",
+    filename: __filename,
+    react: "🤖"
+}, async (conn, mek, m, { from, args, reply, quotedMsg, sender, name }) => {
+    try {
+        // Check if quoted message has media
+        const hasQuotedMedia = quotedMsg && (quotedMsg.image || quotedMsg.video);
+        const question = args.join(' ') || (hasQuotedMedia ? "Describe this image" : "Hello, how can you help me?");
+
+        // Get user ID
+        const userId = sender.split('@')[0];
+
+        let mediaBuffer = null;
+        if (hasQuotedMedia) {
+            await reply("📤 Processing media...");
+            mediaBuffer = await conn.downloadMediaMessage(quotedMsg);
+        }
+
+        await reply("💭 Thinking...");
+
+        // Process the request
+        const aiResponse = await processAIRequest(question, mediaBuffer, userId, name);
+
+        // Send response with AI template
+        await conn.sendMessage(from, {
+            text: aiResponse
+        }, { quoted: ai });
+
     } catch (error) {
-        console.error('Auto-reply image error:', error);
-        // Don't reply on error to avoid spam
+        console.error('AI command error:', error);
+        await reply("❌ An error occurred. Please try again later.");
     }
 });
 
