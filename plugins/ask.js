@@ -5,20 +5,13 @@ const path = require('path');
 const crypto = require('crypto');
 const { cmd } = require('../command');
 
-// Create cache folder if it doesn't exist
-const cacheFolder = path.resolve(__dirname, '../cache');
-if (!fs.existsSync(cacheFolder)) {
-    fs.mkdirSync(cacheFolder, { recursive: true });
-}
-
 // API configuration
 const GEMINI_API = "https://kaiz-apis.gleeze.com/api/gemini-flash-2.0";
 const API_KEY = "cf2ca612-296f-45ba-abbc-473f18f991eb";
 
 // Upload image to Catbox
-async function uploadToCatbox(imagePath) {
+async function uploadToCatbox(imageBuffer) {
     try {
-        const imageBuffer = await fs.readFile(imagePath);
         const formData = new FormData();
         formData.append('reqtype', 'fileupload');
         formData.append('fileToUpload', imageBuffer, {
@@ -51,11 +44,10 @@ cmd({
         
         if (!args[0] && !isImageAnalysis) {
             return reply(
-                '╭────❒ ❌ Error ❒\n' +
-                '├⬡ Please provide a question or quote an image to analyze.\n' +
-                '├⬡ Usage (Question): .gemini [your question]\n' +
-                '├⬡ Usage (Image Analysis): Reply to an image with .gemini [optional question]\n' +
-                '╰────────────❒'
+                '❌ *Error*\n' +
+                'Please provide a question or quote an image to analyze.\n\n' +
+                '*Usage (Question):* .gemini [your question]\n' +
+                '*Usage (Image Analysis):* Reply to an image with .gemini [optional question]'
             );
         }
 
@@ -65,51 +57,40 @@ cmd({
         // Process image if available
         if (isImageAnalysis) {
             await reply(
-                '╭────❒ ⏳ Processing Image ❒\n' +
-                '├⬡ Downloading and preparing the image for analysis...\n' +
-                '├⬡ Please wait a moment...\n' +
-                '╰────────────❒'
+                '⏳ *Processing Image*\n' +
+                'Downloading and preparing the image for analysis...\n' +
+                'Please wait a moment...'
             );
 
             try {
                 // Download the media
                 const mediaBuffer = await conn.downloadMediaMessage(quotedMsg);
-                const filename = crypto.randomBytes(16).toString('hex') + '.jpg';
-                const mediaPath = path.join(cacheFolder, filename);
-                
-                // Save to cache
-                await fs.writeFile(mediaPath, mediaBuffer);
                 
                 // Upload to Catbox
-                const catboxUrl = await uploadToCatbox(mediaPath);
-                
-                // Clean up cached image
-                await fs.unlink(mediaPath);
+                const catboxUrl = await uploadToCatbox(mediaBuffer);
                 
                 if (catboxUrl) {
                     imageUrl = catboxUrl;
                 } else {
                     return reply(
-                        '╭────❒ ❌ Upload Error ❒\n' +
-                        '├⬡ Failed to upload the image for analysis.\n' +
-                        '├⬡ Please try again later.\n' +
-                        '╰────────────❒'
+                        '❌ *Upload Error*\n' +
+                        'Failed to upload the image for analysis.\n' +
+                        'Please try again later.'
                     );
                 }
             } catch (error) {
                 console.error('Error processing image:', error);
                 return reply(
-                    '╭────❒ ❌ Image Error ❒\n' +
-                    '├⬡ An error occurred while processing the image.\n' +
-                    '├⬡ Please try again later.\n' +
-                    '╰────────────❒'
+                    '❌ *Image Error*\n' +
+                    'An error occurred while processing the image.\n' +
+                    'Please try again later.'
                 );
             }
         }
 
         // Show processing message
         await reply(
-            `╭────❒ ⏳ Thinking ❒\n├⬡ Querying Gemini Flash 2.0${imageUrl ? ' with image analysis' : ''}:\n├⬡ ${question || 'Analyzing image...'}\n├⬡ Please wait for the response...\n╰────────────❒`
+            `⏳ *Thinking*\nQuerying Gemini Flash 2.0${imageUrl ? ' with image analysis' : ''}:\n${question || 'Analyzing image...'}\nPlease wait for the response...`
         );
 
         try {
@@ -124,36 +105,50 @@ cmd({
             }
 
             // Call Gemini API
-            const response = await axios.get(apiUrl);
+            const response = await axios.get(apiUrl, { timeout: 30000 });
             const geminiData = response.data;
 
             if (geminiData && geminiData.response) {
+                // Format response to fit within WhatsApp message limits
+                let formattedResponse = geminiData.response;
+                if (formattedResponse.length > 3500) {
+                    formattedResponse = formattedResponse.substring(0, 3500) + '...\n\n*Response truncated due to length*';
+                }
+                
                 return reply(
-                    `╭────❒ 🤖 Gemini Response ❒\n├⬡ ${geminiData.response.replace(/\n/g, '\n├⬡ ')}\n╰────────────❒`
+                    `🤖 *Gemini Response*\n\n${formattedResponse}` + 
+                    (imageUrl ? `\n\n📷 *Image Analyzed:* ${imageUrl}` : '') +
+                    `\n\n_User ID: ${uid}_`
                 );
             } else {
                 return reply(
-                    '╭────❒ ❓ Hmm... ❒\n' +
-                    '├⬡ Gemini Flash 2.0 did not provide a response.\n' +
-                    '├⬡ Please try asking again later.\n' +
-                    '╰────────────❒'
+                    '❓ *Hmm...*\n' +
+                    'Gemini Flash 2.0 did not provide a response.\n' +
+                    'Please try asking again later.'
                 );
             }
         } catch (error) {
             console.error('Error querying Gemini:', error);
+            
+            if (error.code === 'ECONNABORTED') {
+                return reply(
+                    '⏰ *Timeout Error*\n' +
+                    'The request took too long to process.\n' +
+                    'Please try again with a simpler query.'
+                );
+            }
+            
             return reply(
-                '╭────❒ ❌ Error ❒\n' +
-                '├⬡ An error occurred while communicating with Gemini Flash 2.0.\n' +
-                '├⬡ Please try again later.\n' +
-                '╰────────────❒'
+                '❌ *Error*\n' +
+                'An error occurred while communicating with Gemini Flash 2.0.\n' +
+                'Please try again later.'
             );
         }
     } catch (error) {
         console.error('Gemini command error:', error);
         return reply(
-            '╭────❒ ❌ Unexpected Error ❒\n' +
-            '├⬡ Something went wrong. Please try again later.\n' +
-            '╰────────────❒'
+            '❌ *Unexpected Error*\n' +
+            'Something went wrong. Please try again later.'
         );
     }
 });
@@ -171,36 +166,30 @@ cmd({
     
     if (!args[0]) {
         return reply(
-            '╭────❒ AI Status ❒\n' +
-            '├⬡ AI responses are currently: ENABLED\n' +
-            '├⬡ Use: .aichat on - to enable\n' +
-            '├⬡ Use: .aichat off - to disable\n' +
-            '╰────────────❒'
+            '⚙️ *AI Status*\n' +
+            'AI responses are currently: ENABLED\n\n' +
+            'Use: .aichat on - to enable\n' +
+            'Use: .aichat off - to disable'
         );
     }
     
     const action = args[0].toLowerCase();
     if (action === 'on') {
-        // Enable AI logic would go here
         return reply(
-            '╭────❒ AI Enabled ❒\n' +
-            '├⬡ AI responses are now ENABLED\n' +
-            '├⬡ The bot will respond to messages\n' +
-            '╰────────────❒'
+            '✅ *AI Enabled*\n' +
+            'AI responses are now ENABLED\n' +
+            'The bot will respond to messages'
         );
     } else if (action === 'off') {
-        // Disable AI logic would go here
         return reply(
-            '╭────❒ AI Disabled ❒\n' +
-            '├⬡ AI responses are now DISABLED\n' +
-            '├⬡ The bot will not respond to messages\n' +
-            '╰────────────❒'
+            '❌ *AI Disabled*\n' +
+            'AI responses are now DISABLED\n' +
+            'The bot will not respond to messages'
         );
     } else {
         return reply(
-            '╭────❒ Invalid Command ❒\n' +
-            '├⬡ Please use: .aichat on/off\n' +
-            '╰────────────❒'
+            '❌ *Invalid Command*\n' +
+            'Please use: .aichat on/off'
         );
     }
 });
