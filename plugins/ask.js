@@ -1,5 +1,272 @@
 const axios = require('axios');
 const FormData = require('form-data');
+const { cmd } = require('../command');
+
+// API configuration
+const GEMINI_API = "https://kaiz-apis.gleeze.com/api/gemini-vision";
+const API_KEY = "cf2ca612-296f-45ba-abbc-473f18f991eb";
+
+// Upload image to Catbox
+async function uploadToCatbox(imageBuffer) {
+    try {
+        const formData = new FormData();
+        formData.append('reqtype', 'fileupload');
+        formData.append('fileToUpload', imageBuffer, {
+            filename: 'upload.jpg',
+            contentType: 'image/jpeg'
+        });
+        
+        const response = await axios.post('https://catbox.moe/user/api.php', formData, {
+            headers: formData.getHeaders(),
+            timeout: 30000
+        });
+        
+        return response.data;
+    } catch (error) {
+        console.error('Error uploading to Catbox:', error);
+        return null;
+    }
+}
+
+// Gemini AI command
+cmd({
+    pattern: "gemini",
+    alias: ["ai", "googleai", "ask", "vision"],
+    desc: "Interact with Gemini Vision AI - ask questions or analyze images",
+    category: "AI",
+    filename: __filename,
+    react: "🤖"
+}, async (conn, mek, m, { from, args, reply, quotedMsg, sender, name }) => {
+    try {
+        const isImageAnalysis = quotedMsg && (quotedMsg.image || quotedMsg.video);
+        
+        if (!args[0] && !isImageAnalysis) {
+            return reply(
+                '❌ *Error*\n' +
+                'Please provide a question or quote an image to analyze.\n\n' +
+                '*Usage (Question):* .gemini [your question]\n' +
+                '*Usage (Image Analysis):* Reply to an image with .gemini [optional question]'
+            );
+        }
+
+        const question = args.join(' ') || 'What do you see in this image?';
+        let imageUrl = null;
+
+        // Process image if available
+        if (isImageAnalysis) {
+            await reply(
+                '⏳ *Processing Image*\n' +
+                'Downloading and preparing the image for analysis...\n' +
+                'Please wait a moment...'
+            );
+
+            try {
+                // Download the media
+                const mediaBuffer = await conn.downloadMediaMessage(quotedMsg);
+                
+                // Upload to Catbox
+                const catboxUrl = await uploadToCatbox(mediaBuffer);
+                
+                if (catboxUrl) {
+                    imageUrl = catboxUrl;
+                } else {
+                    return reply(
+                        '❌ *Upload Error*\n' +
+                        'Failed to upload the image for analysis.\n' +
+                        'Please try again later.'
+                    );
+                }
+            } catch (error) {
+                console.error('Error processing image:', error);
+                return reply(
+                    '❌ *Image Error*\n' +
+                    'An error occurred while processing the image.\n' +
+                    'Please try again later.'
+                );
+            }
+        }
+
+        // Show processing message
+        await reply(
+            `⏳ *Thinking*\nQuerying Gemini Vision${imageUrl ? ' with image analysis' : ''}:\n${question}\nPlease wait for the response...`
+        );
+
+        try {
+            // Use actual user ID for memory (remove @s.whatsapp.net)
+            const uid = sender.split('@')[0];
+            
+            // Build API URL
+            let apiUrl = `${GEMINI_API}?q=${encodeURIComponent(question)}&uid=${uid}&apikey=${API_KEY}`;
+            
+            if (imageUrl) {
+                apiUrl += `&imageUrl=${encodeURIComponent(imageUrl)}`;
+            }
+
+            // Call Gemini API
+            const response = await axios.get(apiUrl, { timeout: 45000 });
+            const geminiData = response.data;
+
+            if (geminiData && geminiData.response) {
+                // Format response to fit within WhatsApp message limits
+                let formattedResponse = geminiData.response;
+                
+                // Remove "Okay, Darrell, here's what I see in the image:" if present
+                if (formattedResponse.includes("Okay, Darrell, here's what I see in the image:")) {
+                    formattedResponse = formattedResponse.replace("Okay, Darrell, here's what I see in the image:", "Here's what I see in the image:");
+                }
+                
+                // Split into chunks if too long
+                if (formattedResponse.length > 3500) {
+                    const chunks = [];
+                    while (formattedResponse.length > 0) {
+                        let chunk = formattedResponse.substring(0, 3500);
+                        const lastPeriod = chunk.lastIndexOf('.');
+                        if (lastPeriod > 3000 && lastPeriod !== -1) {
+                            chunk = formattedResponse.substring(0, lastPeriod + 1);
+                        }
+                        chunks.push(chunk);
+                        formattedResponse = formattedResponse.substring(chunk.length);
+                    }
+                    
+                    // Send first chunk
+                    await reply(
+                        `🤖 *Gemini Vision Response* (Part 1/${chunks.length})\n\n${chunks[0]}` + 
+                        (imageUrl ? `\n\n📷 *Image Analyzed:* ${imageUrl}` : '')
+                    );
+                    
+                    // Send remaining chunks after a delay
+                    for (let i = 1; i < chunks.length; i++) {
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        await reply(
+                            `🤖 *Gemini Vision Response* (Part ${i + 1}/${chunks.length})\n\n${chunks[i]}`
+                        );
+                    }
+                } else {
+                    return reply(
+                        `🤖 *Gemini Vision Response*\n\n${formattedResponse}` + 
+                        (imageUrl ? `\n\n📷 *Image Analyzed:* ${imageUrl}` : '') +
+                        `\n\n_User ID: ${uid}_`
+                    );
+                }
+            } else {
+                return reply(
+                    '❓ *Hmm...*\n' +
+                    'Gemini Vision did not provide a response.\n' +
+                    'Please try asking again later.'
+                );
+            }
+        } catch (error) {
+            console.error('Error querying Gemini Vision:', error);
+            
+            if (error.code === 'ECONNABORTED') {
+                return reply(
+                    '⏰ *Timeout Error*\n' +
+                    'The request took too long to process.\n' +
+                    'Please try again with a simpler query or smaller image.'
+                );
+            }
+            
+            return reply(
+                '❌ *Error*\n' +
+                'An error occurred while communicating with Gemini Vision.\n' +
+                'Please try again later.'
+            );
+        }
+    } catch (error) {
+        console.error('Gemini command error:', error);
+        return reply(
+            '❌ *Unexpected Error*\n' +
+            'Something went wrong. Please try again later.'
+        );
+    }
+});
+
+// Quick analysis command for images
+cmd({
+    pattern: "analyze",
+    alias: ["whatisthis", "describe"],
+    desc: "Quickly analyze an image using Gemini Vision",
+    category: "AI",
+    filename: __filename,
+    react: "🔍"
+}, async (conn, mek, m, { from, args, reply, quotedMsg, sender }) => {
+    if (!quotedMsg || !(quotedMsg.image || quotedMsg.video)) {
+        return reply(
+            '❌ *Error*\n' +
+            'Please reply to an image with .analyze\n\n' +
+            '*Usage:* Reply to an image with .analyze'
+        );
+    }
+
+    // Set a simple question for analysis
+    const question = "What do you see in this image? Describe it in detail.";
+    
+    await reply(
+        '⏳ *Processing Image*\n' +
+        'Downloading and preparing the image for analysis...\n' +
+        'Please wait a moment...'
+    );
+
+    try {
+        // Download the media
+        const mediaBuffer = await conn.downloadMediaMessage(quotedMsg);
+        
+        // Upload to Catbox
+        const catboxUrl = await uploadToCatbox(mediaBuffer);
+        
+        if (!catboxUrl) {
+            return reply(
+                '❌ *Upload Error*\n' +
+                'Failed to upload the image for analysis.\n' +
+                'Please try again later.'
+            );
+        }
+
+        // Use actual user ID
+        const uid = sender.split('@')[0];
+        
+        // Build API URL
+        const apiUrl = `${GEMINI_API}?q=${encodeURIComponent(question)}&uid=${uid}&imageUrl=${encodeURIComponent(catboxUrl)}&apikey=${API_KEY}`;
+
+        // Call Gemini API
+        const response = await axios.get(apiUrl, { timeout: 45000 });
+        const geminiData = response.data;
+
+        if (geminiData && geminiData.response) {
+            let formattedResponse = geminiData.response;
+            
+            // Split into chunks if too long
+            if (formattedResponse.length > 3500) {
+                formattedResponse = formattedResponse.substring(0, 3500) + '...\n\n*Response truncated due to length*';
+            }
+            
+            return reply(
+                `🔍 *Image Analysis*\n\n${formattedResponse}` + 
+                `\n\n📷 *Image URL:* ${catboxUrl}`
+            );
+        } else {
+            return reply(
+                '❓ *Analysis Failed*\n' +
+                'Could not analyze this image.\n' +
+                'Please try again with a different image.'
+            );
+        }
+    } catch (error) {
+        console.error('Analyze command error:', error);
+        return reply(
+            '❌ *Analysis Error*\n' +
+            'Failed to analyze the image. Please try again later.'
+        );
+    }
+});
+
+module.exports = {
+    uploadToCatbox,
+    GEMINI_API
+};
+
+/*const axios = require('axios');
+const FormData = require('form-data');
 const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
@@ -198,3 +465,4 @@ module.exports = {
     uploadToCatbox,
     GEMINI_API
 };
+*/
