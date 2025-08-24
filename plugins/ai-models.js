@@ -849,7 +849,7 @@ cmd({
 });
 
 cmd({
-    pattern: "aria",
+    pattern: "ariax",
     react: "🎶",
     desc: "Aria AI",
     category: "ai",
