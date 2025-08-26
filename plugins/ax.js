@@ -30,48 +30,56 @@ async function getBotVersion() {
     }
 }
 
+// Function to find a command by pattern or alias
+function findCommand(cmdName) {
+    return commands.find(c => 
+        c.pattern === cmdName || 
+        (c.alias && c.alias.includes(cmdName))
+    );
+}
+
 // Function to simulate command execution
-async function executeCommand(conn, from, command, quotedMsg) {
+async function executeCommand(conn, from, commandName, originalMsg) {
     try {
-        // Create a fake message object that mimics a user sending the command
+        const cmdName = commandName.replace(config.PREFIX, '');
+        const command = findCommand(cmdName);
+        
+        if (!command || typeof command.function !== 'function') {
+            return conn.sendMessage(from, { 
+                text: `❌ Command *${commandName}* not found!` 
+            }, { quoted: originalMsg });
+        }
+        
+        // Create a proper message object structure
         const fakeMessage = {
             key: {
                 remoteJid: from,
                 fromMe: false,
-                id: `${Date.now()}-button`,
-                participant: quotedMsg?.key?.participant || quotedMsg?.sender || from
+                id: `${Date.now()}-button-${cmdName}`,
             },
-            message: {
-                conversation: command
+            message: { 
+                conversation: commandName 
             },
-            pushName: quotedMsg?.pushName || "User",
-            sender: quotedMsg?.sender || from
+            pushName: originalMsg?.pushName || "User",
         };
         
-        // Find the command handler
-        const cmdHandler = commands.find(c => 
-            c.pattern === command.replace(config.PREFIX, '') || 
-            (c.alias && c.alias.includes(command.replace(config.PREFIX, '')))
-        );
+        // Create the context object that command handlers expect
+        const context = {
+            from: from,
+            text: commandName,
+            args: [cmdName],
+            reply: (text, options = {}) => 
+                conn.sendMessage(from, { text }, { quoted: fakeMessage, ...options }),
+            sender: originalMsg?.sender || from
+        };
         
-        if (cmdHandler && typeof cmdHandler.function === 'function') {
-            // Execute the command function
-            await cmdHandler.function(conn, fakeMessage, {
-                from,
-                text: command,
-                reply: (text) => conn.sendMessage(from, { text }, { quoted: fakeMessage }),
-                args: [command.replace(config.PREFIX, '')]
-            });
-        } else {
-            // Fallback: if command not found, send a message
-            await conn.sendMessage(from, { 
-                text: `Command *${command}* executed via menu button!` 
-            }, { quoted: fakeMessage });
-        }
+        // Execute the command function
+        await command.function(conn, fakeMessage, context);
+        
     } catch (error) {
         console.error('Command execution error:', error);
         await conn.sendMessage(from, { 
-            text: `❌ Error executing command: ${error.message}` 
+            text: `❌ Error executing ${commandName}: ${error.message}` 
         });
     }
 }
@@ -194,7 +202,7 @@ async (conn, mek, m, { from, pushname, reply }) => {
                 } catch (error) {
                     console.error('Button action error:', error);
                     await conn.sendMessage(from, { react: { text: '❌', key: receivedMsg.key } });
-                    reply(`❌ Error: ${error.message || 'Action failed'}`);
+                    conn.sendMessage(from, { text: `❌ Error: ${error.message || 'Action failed'}` });
                 }
             }
         };
@@ -211,6 +219,87 @@ async (conn, mek, m, { from, pushname, reply }) => {
         
     } catch (e) {
         console.error('Menu Error:', e);
-        reply(`❌ Error generating menu: ${e.message}`);
+        reply(`❌ Error generating menu: ${error.message}`);
     }
 });
+
+// Create simple implementations for the menu commands if they don't exist
+if (!findCommand('allmenu')) {
+    cmd({
+        pattern: "allmenu",
+        desc: "Show all commands",
+        category: "core",
+        filename: __filename
+    }, async (conn, mek, m, { from, reply }) => {
+        try {
+            let allCommands = "📋 *ALL COMMANDS*\n\n";
+            
+            commands.filter(cmd => cmd.pattern && !cmd.hideCommand)
+                .sort((a, b) => a.pattern.localeCompare(b.pattern))
+                .forEach(cmd => {
+                    allCommands += `• ${config.PREFIX}${cmd.pattern} - ${cmd.desc || 'No description'}\n`;
+                });
+                
+            allCommands += `\nTotal: ${commands.filter(cmd => cmd.pattern).length} commands`;
+            
+            await reply(allCommands);
+        } catch (error) {
+            reply(`❌ Error showing all commands: ${error.message}`);
+        }
+    });
+}
+
+if (!findCommand('system')) {
+    cmd({
+        pattern: "system",
+        desc: "Show system information",
+        category: "core",
+        filename: __filename
+    }, async (conn, mek, m, { from, reply }) => {
+        try {
+            const systemInfo = `
+⚙️ *SYSTEM INFORMATION*
+
+• Platform: ${process.platform}
+• Architecture: ${process.arch}
+• Node.js: ${process.version}
+• Memory: ${(process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2)}MB / ${Math.round(os.totalmem() / 1024 / 1024)}MB
+• Uptime: ${runtime(process.uptime())}
+• CPU: ${os.cpus()[0].model}
+• CPU Cores: ${os.cpus().length}
+            `;
+            
+            await reply(systemInfo);
+        } catch (error) {
+            reply(`❌ Error showing system info: ${error.message}`);
+        }
+    });
+}
+
+if (!findCommand('about')) {
+    cmd({
+        pattern: "about",
+        desc: "Show bot information",
+        category: "core",
+        filename: __filename
+    }, async (conn, mek, m, { from, reply }) => {
+        try {
+            const aboutInfo = `
+ℹ️ *ABOUT ${config.BOTNAME || "BOT"}*
+
+• Creator: ${config.OWNER_NAME || "Mr Frank"}
+• Version: ${await getBotVersion()}
+• Prefix: ${config.PREFIX}
+• Mode: ${config.MODE}
+• Repository: ${config.REPO || "Not specified"}
+• Total Commands: ${commands.filter(cmd => cmd.pattern).length}
+
+This bot is powered by Subzero-MD framework.
+            `;
+            
+            await reply(aboutInfo);
+        } catch (error) {
+            reply(`❌ Error showing about info: ${error.message}`);
+        }
+    });
+}
