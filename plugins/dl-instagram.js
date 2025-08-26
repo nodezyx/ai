@@ -1,311 +1,325 @@
-const axios = require("axios");
-const { cmd } = require("../command");
+const { cmd } = require('../command');
+const axios = require('axios');
+const Config = require('../config');
 
-cmd({
-  pattern: "igimagedl",
-  alias: ["instagramimages", "igimages","igimage"],
-  react: '📥',
-  desc: "Download Instagram posts (images or videos).",
-  category: "download",
-  use: ".igdl <Instagram post URL>",
-  filename: __filename
-}, async (conn, mek, m, { from, reply, args }) => {
-  try {
-    // Check if the user provided an Instagram URL
-    const igUrl = args[0];
-    if (!igUrl || !igUrl.includes("instagram.com")) {
-      return reply('Please provide a valid Instagram post URL. Example: `.igdl https://instagram.com/...`');
+// Optimized axios instance
+const axiosInstance = axios.create({
+    timeout: 15000,
+    maxRedirects: 5,
+    headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
-
-    // Add a reaction to indicate processing
-    await conn.sendMessage(from, { react: { text: '⏳', key: m.key } });
-
-    // Prepare the API URL
-    const apiUrl = `https://api.fgmods.xyz/api/downloader/igdl?url=${encodeURIComponent(igUrl)}&apikey=E8sfLg9l`;
-
-    // Call the API using GET
-    const response = await axios.get(apiUrl);
-
-    // Check if the API response is valid
-    if (!response.data || !response.data.status || !response.data.result) {
-      return reply('❌ Unable to fetch the post. Please check the URL and try again.');
-    }
-
-    // Extract the post details
-    const { url, caption, username, like, comment, isVideo } = response.data.result;
-
-    // Inform the user that the post is being downloaded
-    await reply(`📥 *Downloading Instagram post by @${username}... Please wait.*`);
-
-    // Download and send each media item
-    for (const mediaUrl of url) {
-      const mediaResponse = await axios.get(mediaUrl, { responseType: 'arraybuffer' });
-      if (!mediaResponse.data) {
-        return reply('❌ Failed to download the media. Please try again later.');
-      }
-
-      const mediaBuffer = Buffer.from(mediaResponse.data, 'binary');
-
-      if (isVideo) {
-        // Send as video
-        await conn.sendMessage(from, {
-          video: mediaBuffer,
-          caption: `📥 *Instagram Post*\n\n` +
-            `👤 *Username*: @${username}\n` +
-            `❤️ *Likes*: ${like}\n` +
-            `💬 *Comments*: ${comment}\n` +
-            `📝 *Caption*: ${caption || "No caption"}\n\n` +
-            `> © ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴍʀ ғʀᴀɴᴋ`,
-          contextInfo: {
-            mentionedJid: [m.sender],
-            forwardingScore: 999,
-            isForwarded: true,
-            forwardedNewsletterMessageInfo: {
-              newsletterJid: '120363304325601080@newsletter',
-              newsletterName: '『 𝐒𝐔𝐁𝐙𝐄𝐑𝐎 𝐌𝐃 』',
-              serverMessageId: 143
-            }
-          }
-        }, { quoted: mek });
-      } else {
-        // Send as image
-        await conn.sendMessage(from, {
-          image: mediaBuffer,
-          caption: `📥 *Instagram Post*\n\n` +
-            `👤 *Username*: @${username}\n` +
-            `❤️ *Likes*: ${like}\n` +
-            `💬 *Comments*: ${comment}\n` +
-            `📝 *Caption*: ${caption || "No caption"}\n\n` +
-            `> © ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴍʀ ғʀᴀɴᴋ`,
-          contextInfo: {
-            mentionedJid: [m.sender],
-            forwardingScore: 999,
-            isForwarded: true,
-            forwardedNewsletterMessageInfo: {
-              newsletterJid: '120363304325601080@newsletter',
-              newsletterName: '『 𝐒𝐔𝐁𝐙𝐄𝐑𝐎 𝐌𝐃 』',
-              serverMessageId: 143
-            }
-          }
-        }, { quoted: mek });
-      }
-    }
-
-    // Add a reaction to indicate success
-    await conn.sendMessage(from, { react: { text: '✅', key: m.key } });
-  } catch (error) {
-    console.error('Error downloading Instagram post:', error);
-    reply('❌ Unable to download the post. Please try again later.');
-
-    // Add a reaction to indicate failure
-    await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
-  }
 });
-// VIDEO SECTION
 
-/*
-cmd({
-  pattern: "igvid",
-  alias: ["igvideo","ig","instagram", "igdl"],
-  react: '📥',
-  desc: "Download Instagram videos.",
-  category: "download",
-  use: ".igvid <Instagram video URL>",
-  filename: __filename
-}, async (conn, mek, m, { from, reply, args }) => {
-  try {
-    // Check if the user provided an Instagram video URL
-    const igUrl = args[0];
-    if (!igUrl || !igUrl.includes("instagram.com")) {
-      return reply('Please provide a valid Instagram video URL. Example: `.igvid https://instagram.com/...`');
+// API configuration
+const INSTAGRAM_API_URL = 'https://dev-priyanshi.onrender.com/api/alldl';
+
+// Utility function to check if text is a URL
+function isUrl(text) {
+    try {
+        new URL(text);
+        return true;
+    } catch (e) {
+        return false;
     }
+}
 
-    // Add a reaction to indicate processing
-    await conn.sendMessage(from, { react: { text: '⏳', key: m.key } });
+// Utility function to validate Instagram URL
+function isValidInstagramUrl(url) {
+    return url.includes('instagram.com') || url.includes('instagr.am') || 
+           url.includes('/reel/') || url.includes('/p/') || url.includes('/stories/');
+}
 
-    // Prepare the API URL
-    const apiUrl = `https://api.nexoracle.com/downloader/aio2?apikey=free_key@maher_apis&url=${encodeURIComponent(igUrl)}`;
-
-    // Call the API using GET
-    const response = await axios.get(apiUrl);
-
-    // Check if the API response is valid
-    if (!response.data || response.data.status !== 200 || !response.data.result) {
-      return reply('❌ Unable to fetch the video. Please check the URL and try again.');
-    }
-
-    // Extract the video details
-    const { title, low, high } = response.data.result;
-
-    // Inform the user that the video is being downloaded
-    await reply(`📥 *Downloading ${title || "Instagram video"}... Please wait.*`);
-
-    // Choose the highest quality video URL
-    const videoUrl = high || low;
-
-    // Download the video
-    const videoResponse = await axios.get(videoUrl, { responseType: 'arraybuffer' });
-    if (!videoResponse.data) {
-      return reply('❌ Failed to download the video. Please try again later.');
-    }
-
-    // Prepare the video buffer
-    const videoBuffer = Buffer.from(videoResponse.data, 'binary');
-
-    // Send the video
-    await conn.sendMessage(from, {
-      video: videoBuffer,
-      caption: `📥 *Instagram Video*\n\n` +
-        `🔖 *Title*: ${title || "No title"}\n\n` +
-        `> © ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴍʀ ғʀᴀɴᴋ`,
-      contextInfo: {
-        mentionedJid: [m.sender],
-        forwardingScore: 999,
-        isForwarded: true,
-        forwardedNewsletterMessageInfo: {
-          newsletterJid: '120363304325601080@newsletter',
-          newsletterName: '『 𝐒𝐔𝐁𝐙𝐄𝐑𝐎 𝐌𝐃 』',
-          serverMessageId: 143
-        }
-      }
-    }, { quoted: mek });
-
-    // Add a reaction to indicate success
-    await conn.sendMessage(from, { react: { text: '✅', key: m.key } });
-  } catch (error) {
-    console.error('Error downloading Instagram video:', error);
-    reply('❌ Unable to download the video. Please try again later.');
-
-    // Add a reaction to indicate failure
-    await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
-  }
-});
-*/
-
-
-cmd({
-  pattern: "igvid",
-  alias: ["igvideo","ig","instagram", "igdl"],
-  react: '📥',
-  desc: "Download Instagram videos.",
-  category: "download",
-  use: ".igvid <Instagram video URL>",
-  filename: __filename
-}, async (conn, mek, m, { from, reply, args }) => {
-  try {
-    // Check if the user provided an Instagram video URL
-    const igUrl = args[0];
-    if (!igUrl || !igUrl.includes("instagram.com")) {
-      return reply('Please provide a valid Instagram video URL. Example: `.igvid https://instagram.com/...`');
-    }
-
-    // Add a reaction to indicate processing
-    await conn.sendMessage(from, { react: { text: '⏳', key: m.key } });
-
-    // Prepare the primary API URL
-    const primaryApiUrl = `https://api.nexoracle.com/downloader/aio2?apikey=free_key@maher_apis&url=${encodeURIComponent(igUrl)}`;
-    
-    // Prepare fallback APIs
-    const fallbackApis = [
-      `https://api.giftedtech.web.id/api/download/instadl?apikey=gifted&url=${encodeURIComponent(igUrl)}`,
-      `https://kaiz-apis.gleeze.com/api/insta-dl?url=${encodeURIComponent(igUrl)}&apikey=cf2ca612-296f-45ba-abbc-473f18f991eb`
-    ];
-
-    let videoData = null;
-    let apiIndex = 0;
-    const apis = [primaryApiUrl, ...fallbackApis];
-
-    // Try each API until we get a successful response
-    while (apiIndex < apis.length && !videoData) {
-      try {
-        const response = await axios.get(apis[apiIndex]);
+// Utility function to fetch Instagram video info
+async function fetchInstagramVideoInfo(url) {
+    try {
+        const apiUrl = `${INSTAGRAM_API_URL}?url=${encodeURIComponent(url)}`;
+        const response = await axiosInstance.get(apiUrl);
         
-        // Parse response based on which API responded
-        if (apiIndex === 0) {
-          // Primary API (Nexoracle) response format
-          if (response.data && response.data.status === 200 && response.data.result) {
-            const { title, low, high } = response.data.result;
-            videoData = {
-              title: title || "Instagram Video",
-              downloadUrl: high || low,
-              thumbnail: response.data.result.thumbnail || null
-            };
-          }
-        } else if (apiIndex === 1) {
-          // GiftedTech API response format
-          if (response.data && response.data.success && response.data.result) {
-            videoData = {
-              title: "Instagram Video",
-              downloadUrl: response.data.result.download_url,
-              thumbnail: response.data.result.thumbnail || null
-            };
-          }
-        } else if (apiIndex === 2) {
-          // Kaizenji API response format
-          if (response.data && response.data.result) {
-            videoData = {
-              title: response.data.result.title || "Instagram Video",
-              downloadUrl: response.data.result.video_url,
-              thumbnail: response.data.result.thumbnail || null,
-              views: response.data.result.view_count,
-              likes: response.data.result.like_count,
-              duration: response.data.result.duration
-            };
-          }
+        if (!response.data?.status || !response.data.data) {
+            throw new Error('Invalid API response from Instagram');
         }
-      } catch (error) {
-        console.error(`Error with API ${apiIndex}:`, error.message);
-      }
-      apiIndex++;
-    }
-
-    if (!videoData) {
-      return reply('❌ All download services failed. Please try again later.');
-    }
-
-    // Inform the user that the video is being downloaded
-    await reply(`📥 *Downloading ${videoData.title}... Please wait.*`);
-
-    // Download the video
-    const videoResponse = await axios.get(videoData.downloadUrl, { responseType: 'arraybuffer' });
-    if (!videoResponse.data) {
-      return reply('❌ Failed to download the video. Please try again later.');
-    }
-
-    // Prepare the video buffer
-    const videoBuffer = Buffer.from(videoResponse.data, 'binary');
-
-    // Build caption with available details
-    let caption = `📥 *Instagram Video*\n\n`;
-    caption += `🔖 *Title*: ${videoData.title}\n`;
-    if (videoData.views) caption += `👀 *Views*: ${videoData.views.toLocaleString()}\n`;
-    if (videoData.likes) caption += `❤️ *Likes*: ${videoData.likes.toLocaleString()}\n`;
-    if (videoData.duration) caption += `⏱️ *Duration*: ${videoData.duration} seconds\n`;
-    caption += `\n> © ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴍʀ ғʀᴀɴᴋ`;
-
-    // Send the video
-    await conn.sendMessage(from, {
-      video: videoBuffer,
-      caption: caption,
-      contextInfo: {
-        mentionedJid: [m.sender],
-        forwardingScore: 999,
-        isForwarded: true,
-        forwardedNewsletterMessageInfo: {
-          newsletterJid: '120363304325601080@newsletter',
-          newsletterName: '『 𝐒𝐔𝐁𝐙𝐄𝐑𝐎 𝐌𝐃 』',
-          serverMessageId: 143
+        
+        // Handle undefined title
+        const videoData = response.data.data;
+        if (videoData.title === 'undefined' || videoData.title === 'undefined💔') {
+            videoData.title = 'Instagram Video';
         }
-      }
-    }, { quoted: mek });
+        
+        return videoData;
+    } catch (error) {
+        console.error('Instagram Video API error:', error);
+        throw new Error('Failed to fetch Instagram video information');
+    }
+}
 
-    // Add a reaction to indicate success
-    await conn.sendMessage(from, { react: { text: '✅', key: m.key } });
-  } catch (error) {
-    console.error('Error downloading Instagram video:', error);
-    reply('❌ Unable to download the video. Please try again later.');
+// Utility function to download video
+async function downloadVideo(videoUrl) {
+    try {
+        const response = await axiosInstance.get(videoUrl, {
+            responseType: 'arraybuffer',
+            timeout: 60000,
+            onDownloadProgress: (progressEvent) => {
+                const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                console.log(`Download progress: ${percent}%`);
+            }
+        });
+        
+        return Buffer.from(response.data, 'binary');
+    } catch (error) {
+        console.error('Video download error:', error);
+        throw new Error('Failed to download video');
+    }
+}
 
-    // Add a reaction to indicate failure
-    await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
-  }
+// Utility function to fetch thumbnail
+async function fetchThumbnail(thumbnailUrl) {
+    if (!thumbnailUrl) return null;
+    try {
+        const response = await axiosInstance.get(thumbnailUrl, { 
+            responseType: 'arraybuffer', 
+            timeout: 8000 
+        });
+        return Buffer.from(response.data, 'binary');
+    } catch (e) {
+        console.error('Thumbnail error:', e);
+        return null;
+    }
+}
+
+cmd({
+    pattern: "ig",
+    alias: ["instagram", "igvideo", "igdownload", "reel"],
+    desc: "Download videos from Instagram",
+    category: "download",
+    react: "📸",
+    use: "<Instagram video URL>",
+    filename: __filename,
+}, async (conn, mek, m, { text, reply }) => {
+    try {
+        if (!text) {
+            await conn.sendMessage(mek.chat, { react: { text: '⚠️', key: mek.key } });
+            return reply('📸 *Instagram Video Downloader*\n\n' +
+                        '*Usage:* .ig <Instagram video URL>\n\n' +
+                        'Examples:\n' +
+                        `• ${Config.PREFIX}ig https://instagram.com/reel/DN0oBN7WG3W/\n` +
+                        `• ${Config.PREFIX}ig https://www.instagram.com/p/Cabc123def/\n` +
+                        `• ${Config.PREFIX}ig https://instagr.am/reel/DN0oBN7WG3W/`);
+        }
+
+        // Validate Instagram URL
+        if (!isValidInstagramUrl(text)) {
+            await conn.sendMessage(mek.chat, { react: { text: '❌', key: mek.key } });
+            return reply('❌ *Invalid Instagram URL*\n\n' +
+                        'Please provide a valid Instagram video URL.\n' +
+                        'Supported formats:\n' +
+                        '• https://instagram.com/reel/DN0oBN7WG3W/\n' +
+                        '• https://www.instagram.com/p/Cabc123def/\n' +
+                        '• https://instagr.am/reel/DN0oBN7WG3W/\n' +
+                        '• https://instagram.com/stories/username/123456789/');
+        }
+
+        // Send processing reaction
+        await conn.sendMessage(mek.chat, { react: { text: '⏳', key: mek.key } });
+
+        // Fetch video info
+        const videoData = await fetchInstagramVideoInfo(text);
+        
+        // Check if button interface should be used
+        const useButtons = Config.BUTTON === true || Config.BUTTON === "true";
+
+        if (useButtons) {
+            // Button-based interface
+            try {
+                // Fetch thumbnail
+                const thumbnailBuffer = await fetchThumbnail(videoData.thumbnail);
+
+                // Generate unique session ID
+                const sessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+                // Prepare caption
+                const caption = `📸 *Instagram Video Downloader*\n\n` +
+                              `📌 *Title*: ${videoData.title}\n` +
+                              `🔄 *Quality Options Available*\n\n` +
+                              `> Powered by Priyanshi Kaur API`;
+
+                // Create buttons message
+                const buttonsMessage = {
+                    image: thumbnailBuffer,
+                    caption: caption,
+                    footer: Config.FOOTER || 'Select download quality',
+                    buttons: [
+                        {
+                            buttonId: `ig-high-${sessionId}-${encodeURIComponent(text)}`,
+                            buttonText: { displayText: '🎥 High Quality' },
+                            type: 1
+                        },
+                        {
+                            buttonId: `ig-low-${sessionId}-${encodeURIComponent(text)}`,
+                            buttonText: { displayText: '📱 Low Quality' },
+                            type: 1
+                        }
+                    ],
+                    headerType: 1,
+                    contextInfo: {
+                        externalAdReply: {
+                            title: videoData.title,
+                            body: `Available in multiple qualities`,
+                            thumbnail: thumbnailBuffer,
+                            mediaType: 1,
+                            mediaUrl: text,
+                            sourceUrl: text
+                        }
+                    }
+                };
+
+                // Send message with buttons
+                const finalMsg = await conn.sendMessage(mek.chat, buttonsMessage, { quoted: mek });
+                const messageId = finalMsg.key.id;
+
+                // Button handler
+                const buttonHandler = async (msgData) => {
+                    const receivedMsg = msgData.messages[0];
+                    if (!receivedMsg.message?.buttonsResponseMessage) return;
+
+                    const buttonId = receivedMsg.message.buttonsResponseMessage.selectedButtonId;
+                    const senderId = receivedMsg.key.remoteJid;
+                    const isReplyToBot = receivedMsg.message.buttonsResponseMessage.contextInfo?.stanzaId === messageId;
+
+                    if (isReplyToBot && senderId === mek.chat && buttonId.includes(sessionId)) {
+                        conn.ev.off('messages.upsert', buttonHandler); // Remove listener
+
+                        await conn.sendMessage(mek.chat, { react: { text: '⏳', key: receivedMsg.key } });
+
+                        try {
+                            const isHighQuality = buttonId.startsWith(`ig-high-${sessionId}`);
+                            const videoUrl = isHighQuality ? videoData.high : videoData.low;
+                            
+                            // Download the video
+                            await reply('```Downloading Instagram video... Please wait.📥```');
+                            const videoBuffer = await downloadVideo(videoUrl);
+                            
+                            const fileName = `${videoData.title.replace(/[<>:"\/\\|?*]+/g, '')}.mp4`;
+
+                            // Send video
+                            await conn.sendMessage(mek.chat, {
+                                video: videoBuffer,
+                                caption: `📸 *${videoData.title}*\n` +
+                                        `📏 *Quality*: ${isHighQuality ? 'High' : 'Low'}\n` +
+                                        `🌐 *Source*: Instagram\n\n` +
+                                        `> Downloaded via ${Config.BOTNAME || 'Bot'}`,
+                                fileName: fileName
+                            }, { quoted: receivedMsg });
+
+                            await conn.sendMessage(mek.chat, { react: { text: '✅', key: receivedMsg.key } });
+                        } catch (error) {
+                            console.error('Instagram Video Download Error:', error);
+                            await conn.sendMessage(mek.chat, { react: { text: '❌', key: receivedMsg.key } });
+                            reply(`❌ Error: ${error.message || 'Download failed'}`);
+                        }
+                    }
+                };
+
+                // Add listener
+                conn.ev.on('messages.upsert', buttonHandler);
+
+                // Remove listener after 2 minutes
+                setTimeout(() => {
+                    conn.ev.off('messages.upsert', buttonHandler);
+                }, 120000);
+
+            } catch (error) {
+                console.error('Button interface error:', error);
+                // Fall back to text interface if button interface fails
+                await sendVideoDirectly();
+            }
+        } else {
+            // Text-based interface
+            await sendVideoDirectly();
+        }
+
+        async function sendVideoDirectly() {
+            // Ask for quality preference
+            await reply(`📸 *${videoData.title}*\n\n` +
+                        `Please choose quality:\n` +
+                        `1 - High Quality 🎥\n` +
+                        `2 - Low Quality 📱\n\n` +
+                        `*Reply with 1 or 2*`);
+
+            // Set up response listener
+            const messageListener = async (messageUpdate) => {
+                try {
+                    const mekInfo = messageUpdate?.messages[0];
+                    if (!mekInfo?.message) return;
+
+                    const message = mekInfo.message;
+                    const messageType = message.conversation || message.extendedTextMessage?.text;
+                    const isReplyToOriginal = mekInfo.key.remoteJid === mek.chat;
+
+                    if (!isReplyToOriginal || !['1', '2'].includes(messageType?.trim())) return;
+
+                    // Immediately remove listener
+                    conn.ev.off('messages.upsert', messageListener);
+
+                    const isHighQuality = messageType.trim() === "1";
+                    const videoUrl = isHighQuality ? videoData.high : videoData.low;
+
+                    // Download the video
+                    await reply('```Downloading Instagram video... Please wait.📥```');
+                    const videoBuffer = await downloadVideo(videoUrl);
+                    
+                    const fileName = `${videoData.title.replace(/[<>:"\/\\|?*]+/g, '')}.mp4`;
+
+                    // Send video
+                    await conn.sendMessage(mek.chat, {
+                        video: videoBuffer,
+                        caption: `📸 *${videoData.title}*\n` +
+                                `📏 *Quality*: ${isHighQuality ? 'High' : 'Low'}\n` +
+                                `🌐 *Source*: Instagram\n\n` +
+                                `> Downloaded via ${Config.BOTNAME || 'Bot'}`,
+                        fileName: fileName
+                    }, { quoted: mek });
+
+                    // Send success reaction
+                    try {
+                        if (mekInfo?.key?.id) {
+                            await conn.sendMessage(mek.chat, { react: { text: "✅", key: mekInfo.key } });
+                        }
+                    } catch (reactError) {
+                        console.error('Success reaction failed:', reactError);
+                    }
+
+                } catch (error) {
+                    console.error('Download error:', error);
+                    reply('❌ Download failed: ' + (error.message || 'Network error'));
+                    try {
+                        if (mek?.key?.id) {
+                            await conn.sendMessage(mek.chat, { react: { text: "❌", key: mek.key } });
+                        }
+                    } catch (reactError) {
+                        console.error('Error reaction failed:', reactError);
+                    }
+                }
+            };
+
+            conn.ev.on('messages.upsert', messageListener);
+
+            // Remove listener after 2 minutes
+            setTimeout(() => {
+                conn.ev.off('messages.upsert', messageListener);
+            }, 120000);
+        }
+
+    } catch (error) {
+        console.error('Instagram Video Command Error:', error);
+        await conn.sendMessage(mek.chat, { react: { text: '❌', key: mek.key } });
+        
+        if (error.message.includes('Invalid Instagram URL')) {
+            reply('❌ *Invalid Instagram URL*\n\nPlease provide a valid Instagram video URL.\n' +
+                 'Supported formats:\n• https://instagram.com/reel/DN0oBN7WG3W/\n' +
+                 '• https://www.instagram.com/p/Cabc123def/');
+        } else {
+            reply(`❌ Error: ${error.message || 'Failed to process Instagram video'}`);
+        }
+    }
 });
