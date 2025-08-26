@@ -30,6 +30,52 @@ async function getBotVersion() {
     }
 }
 
+// Function to simulate command execution
+async function executeCommand(conn, from, command, quotedMsg) {
+    try {
+        // Create a fake message object that mimics a user sending the command
+        const fakeMessage = {
+            key: {
+                remoteJid: from,
+                fromMe: false,
+                id: `${Date.now()}-button`,
+                participant: quotedMsg?.key?.participant || quotedMsg?.sender || from
+            },
+            message: {
+                conversation: command
+            },
+            pushName: quotedMsg?.pushName || "User",
+            sender: quotedMsg?.sender || from
+        };
+        
+        // Find the command handler
+        const cmdHandler = commands.find(c => 
+            c.pattern === command.replace(config.PREFIX, '') || 
+            (c.alias && c.alias.includes(command.replace(config.PREFIX, '')))
+        );
+        
+        if (cmdHandler && typeof cmdHandler.function === 'function') {
+            // Execute the command function
+            await cmdHandler.function(conn, fakeMessage, {
+                from,
+                text: command,
+                reply: (text) => conn.sendMessage(from, { text }, { quoted: fakeMessage }),
+                args: [command.replace(config.PREFIX, '')]
+            });
+        } else {
+            // Fallback: if command not found, send a message
+            await conn.sendMessage(from, { 
+                text: `Command *${command}* executed via menu button!` 
+            }, { quoted: fakeMessage });
+        }
+    } catch (error) {
+        console.error('Command execution error:', error);
+        await conn.sendMessage(from, { 
+            text: `❌ Error executing command: ${error.message}` 
+        });
+    }
+}
+
 cmd({
     pattern: "menu",
     desc: "subzero menu",
@@ -133,18 +179,15 @@ async (conn, mek, m, { from, pushname, reply }) => {
                 try {
                     if (buttonId.startsWith(`menu-allmenu-${sessionId}`)) {
                         // Execute allmenu command
-                        await conn.sendMessage(from, { text: `Executing: ${config.PREFIX}allmenu` });
-                        // You would call your allmenu function here
+                        await executeCommand(conn, from, `${config.PREFIX}allmenu`, receivedMsg);
                     } 
                     else if (buttonId.startsWith(`menu-system-${sessionId}`)) {
                         // Execute system command
-                        await conn.sendMessage(from, { text: `Executing: ${config.PREFIX}system` });
-                        // You would call your system function here
+                        await executeCommand(conn, from, `${config.PREFIX}system`, receivedMsg);
                     } 
                     else if (buttonId.startsWith(`menu-about-${sessionId}`)) {
                         // Execute about command
-                        await conn.sendMessage(from, { text: `Executing: ${config.PREFIX}about` });
-                        // You would call your about function here
+                        await executeCommand(conn, from, `${config.PREFIX}about`, receivedMsg);
                     }
                     
                     await conn.sendMessage(from, { react: { text: '✅', key: receivedMsg.key } });
