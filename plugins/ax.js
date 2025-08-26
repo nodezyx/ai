@@ -50,9 +50,9 @@ async (conn, mek, m, { from, pushname, reply }) => {
 
         // Generate the top info section only (no readmore content)
         const topInfo = `
-╔══════════════════════╗
+
    🧊 *${botname}* 🧊
-╚══════════════════════╝
+
 
 ▧ *ᴄʀᴇᴀᴛᴏʀ* : *${ownername}* 🇿🇼
 ▧ *ᴍᴏᴅᴇ* : *${config.MODE}* 
@@ -63,9 +63,6 @@ async (conn, mek, m, { from, pushname, reply }) => {
 ▧ *ᴜᴘᴛɪᴍᴇ* : ${runtime(process.uptime())} 
 ▧ *ᴄᴏᴍᴍᴀɴᴅs* : ${totalCommands}
 
-╔══════════════════════╗
-    📋 *QUICK ACCESS*
-╚══════════════════════╝
 `;
 
         const imageUrl = config.BOTIMAGE || 'https://i.postimg.cc/XNTmcqZ3/subzero-menu.png';
@@ -82,8 +79,8 @@ async (conn, mek, m, { from, pushname, reply }) => {
                     type: 1
                 },
                 {
-                    buttonId: `${config.PREFIX}system`,
-                    buttonText: { displayText: '⚙️ SYSTEM' },
+                    buttonId: `${config.PREFIX}ping`,
+                    buttonText: { displayText: '⚙️ PING' },
                     type: 1
                 },
                 {
