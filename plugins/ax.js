@@ -50,9 +50,9 @@ async (conn, mek, m, { from, pushname, reply }) => {
 
         // Generate the top info section only (no readmore content)
         const topInfo = `
-
+╔══════════════════════╗
    🧊 *${botname}* 🧊
-
+╚══════════════════════╝
 
 ▧ *ᴄʀᴇᴀᴛᴏʀ* : *${ownername}* 🇿🇼
 ▧ *ᴍᴏᴅᴇ* : *${config.MODE}* 
@@ -63,9 +63,15 @@ async (conn, mek, m, { from, pushname, reply }) => {
 ▧ *ᴜᴘᴛɪᴍᴇ* : ${runtime(process.uptime())} 
 ▧ *ᴄᴏᴍᴍᴀɴᴅs* : ${totalCommands}
 
+╔══════════════════════╗
+    📋 *QUICK ACCESS*
+╚══════════════════════╝
 `;
 
         const imageUrl = config.BOTIMAGE || 'https://i.postimg.cc/XNTmcqZ3/subzero-menu.png';
+        
+        // Generate unique session ID for this menu
+        const sessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         
         // Create buttons message
         const buttonsMessage = {
@@ -74,17 +80,17 @@ async (conn, mek, m, { from, pushname, reply }) => {
             footer: config.FOOTER || 'Select an option below',
             buttons: [
                 {
-                    buttonId: `${config.PREFIX}allmenu`,
+                    buttonId: `menu-allmenu-${sessionId}`,
                     buttonText: { displayText: '📋 ALL MENU' },
                     type: 1
                 },
                 {
-                    buttonId: `${config.PREFIX}ping`,
-                    buttonText: { displayText: '⚙️ PING' },
+                    buttonId: `menu-system-${sessionId}`,
+                    buttonText: { displayText: '⚙️ SYSTEM' },
                     type: 1
                 },
                 {
-                    buttonId: `${config.PREFIX}about`,
+                    buttonId: `menu-about-${sessionId}`,
                     buttonText: { displayText: 'ℹ️ ABOUT' },
                     type: 1
                 }
@@ -106,7 +112,57 @@ async (conn, mek, m, { from, pushname, reply }) => {
         };
 
         // Send the message with buttons
-        await conn.sendMessage(from, buttonsMessage, { quoted: mek });
+        const sentMsg = await conn.sendMessage(from, buttonsMessage, { quoted: mek });
+        const messageId = sentMsg.key.id;
+
+        // Button handler
+        const buttonHandler = async (msgData) => {
+            const receivedMsg = msgData.messages[0];
+            if (!receivedMsg.message?.buttonsResponseMessage) return;
+
+            const buttonId = receivedMsg.message.buttonsResponseMessage.selectedButtonId;
+            const senderId = receivedMsg.key.remoteJid;
+            const isReplyToBot = receivedMsg.message.buttonsResponseMessage.contextInfo?.stanzaId === messageId;
+
+            if (isReplyToBot && senderId === from && buttonId.includes(sessionId)) {
+                // Remove listener to prevent multiple triggers
+                conn.ev.off('messages.upsert', buttonHandler);
+                
+                await conn.sendMessage(from, { react: { text: '⏳', key: receivedMsg.key } });
+                
+                try {
+                    if (buttonId.startsWith(`menu-allmenu-${sessionId}`)) {
+                        // Execute allmenu command
+                        await conn.sendMessage(from, { text: `Executing: ${config.PREFIX}allmenu` });
+                        // You would call your allmenu function here
+                    } 
+                    else if (buttonId.startsWith(`menu-system-${sessionId}`)) {
+                        // Execute system command
+                        await conn.sendMessage(from, { text: `Executing: ${config.PREFIX}system` });
+                        // You would call your system function here
+                    } 
+                    else if (buttonId.startsWith(`menu-about-${sessionId}`)) {
+                        // Execute about command
+                        await conn.sendMessage(from, { text: `Executing: ${config.PREFIX}about` });
+                        // You would call your about function here
+                    }
+                    
+                    await conn.sendMessage(from, { react: { text: '✅', key: receivedMsg.key } });
+                } catch (error) {
+                    console.error('Button action error:', error);
+                    await conn.sendMessage(from, { react: { text: '❌', key: receivedMsg.key } });
+                    reply(`❌ Error: ${error.message || 'Action failed'}`);
+                }
+            }
+        };
+
+        // Add listener for button responses
+        conn.ev.on('messages.upsert', buttonHandler);
+
+        // Remove listener after 2 minutes
+        setTimeout(() => {
+            conn.ev.off('messages.upsert', buttonHandler);
+        }, 120000);
 
         await conn.sendPresenceUpdate('paused', from);
         
