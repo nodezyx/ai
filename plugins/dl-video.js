@@ -1,368 +1,277 @@
-//plugin by mr frank..... ❄️🪄
+const { cmd } = require('../command');
+const axios = require('axios');
+const Config = require('../config');
 
-//Don't remove credit.. 🪄
-// https://whatsapp.com/channel/0029Vb6HQGHAojYtcbJg5z1Z
+// Optimized axios instance
+const axiosInstance = axios.create({
+    timeout: 15000,
+    maxRedirects: 5,
+    headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+});
 
+// API configuration
+const VIDEO_API_URL = 'https://dev-priyanshi.onrender.com/api/alldl';
 
-const { cmd } = require("../command");
-const yts = require("yt-search");
-const axios = require("axios");
-const fs = require("fs").promises;
-const path = require("path");
-const os = require("os");
-
-
-const cache = new Map();
-
-function normalizeYouTubeUrl(url) {
-  const match = url.match(/(?:youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/.*[?&]v=)([a-zA-Z0-9_-]{11})/);
-  return match ? `https://youtube.com/watch?v=${match[1]}` : null;
-}
-
-
-function getVideoId(url) {
-  const match = url.match(/(?:youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/.*[?&]v=)([a-zA-Z0-9_-]{11})/);
-  return match ? match[1] : null;
-}
-
-async function downloadAndValidateVideo(url, retries = 2) {
-  try {
-   
+// Utility function to fetch video info
+async function fetchVideoInfo(url) {
     try {
-      const headResponse = await axios.head(url, { timeout: 10000 });
-      const contentType = headResponse.headers["content-type"];
-      if (!contentType.includes("video/") && !contentType.includes("application/octet-stream")) {
-        console.error(`Invalid content type: ${contentType}`);
-        if (retries > 0) return downloadAndValidateVideo(url, retries - 1);
-        return null;
-      }
-    } catch (error) {
-      console.warn(`Header check failed: ${error.message}, proceeding with download...`);
-    }
-
-    
-    const tempDir = os.tmpdir();
-    const tempFile = path.join(tempDir, `video_${Date.now()}.mp4`);
-    const response = await axios({
-      method: "get",
-      url: url,
-      responseType: "stream",
-      timeout: 30000,
-    });
-
-    const writer = require("fs").createWriteStream(tempFile);
-    response.data.pipe(writer);
-
-    
-    await new Promise((resolve, reject) => {
-      writer.on("finish", resolve);
-      writer.on("error", reject);
-    });
-
-    
-    const stats = await fs.stat(tempFile);
-    if (stats.size < 100000) {
-      console.error("Downloaded file is too small:", stats.size);
-      await fs.unlink(tempFile).catch(() => {});
-      if (retries > 0) return downloadAndValidateVideo(url, retries - 1);
-      return null;
-    }
-
-    return tempFile;
-  } catch (error) {
-    console.error(`Failed to download video: ${error.message}`);
-    if (retries > 0) {
-      console.log(`Retrying download... Attempts left: ${retries}`);
-      return downloadAndValidateVideo(url, retries - 1);
-    }
-    return null;
-  }
-}
-
-
-async function checkProgress(progressUrl, retries = 10) {
-  try {
-    const progressEndpoint = `https://chathuraytdl.netlify.app/.netlify/functions/ytdl?action=progress&url=${encodeURIComponent(progressUrl)}`;
-    const response = await axios.get(progressEndpoint, { timeout: 10000 });
-    const data = response.data;
-
-    if (data.success && data.processing_status === "completed" && data.download_url) {
-      return { download_url: data.download_url, status: "completed" };
-    } else if (data.success && data.processing_status !== "completed") {
-      console.log(`Processing: ${data.processing_status || "in progress"}`);
-      if (retries > 0) {
-        await new Promise((resolve) => setTimeout(resolve, 10000)); 
-        return checkProgress(progressUrl, retries - 1);
-      }
-    }
-    return null;
-  } catch (error) {
-    console.error(`Progress check failed: ${error.message}`);
-    if (retries > 0) {
-      await new Promise((resolve) => setTimeout(resolve, 10000));
-      return checkProgress(progressUrl, retries - 1);
-    }
-    return null;
-  }
-}
-
-
-async function fetchVideoData(url, format, retries = 2) {
-  const cacheKey = `${getVideoId(url)}:${format}`;
-  if (cache.has(cacheKey)) {
-    console.log(`Using cached data for: ${url} (${format})`);
-    return cache.get(cacheKey);
-  }
-
-  try {
-    const apiUrl = `https://chathuraytdl.netlify.app/ytdl?url=${encodeURIComponent(url)}&format=${format}`;
-    console.log(`Fetching from API: ${apiUrl}`);
-    const response = await axios.get(apiUrl, {
-      timeout: 15000,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-      },
-    });
-
-    const data = response.data;
-    if (data.success && data.download_url && data.processing_status === "completed") {
-      const result = {
-        download_url: data.download_url,
-        title: data.info.title || "",
-        thumbnail: data.info.image || `https://i.ytimg.com/vi/${getVideoId(url)}/hqdefault.jpg`,
-      };
-      cache.set(cacheKey, result);
-      setTimeout(() => cache.delete(cacheKey), 3600000); 
-      return result;
-    } else if (data.success && data.progress_url) {
-      console.log("Checking progress...");
-      const progressResult = await checkProgress(data.progress_url);
-      if (progressResult && progressResult.status === "completed") {
-        const result = {
-          download_url: progressResult.download_url,
-          title: data.info.title || "",
-          thumbnail: data.info.image || `https://i.ytimg.com/vi/${getVideoId(url)}/hqdefault.jpg`,
-        };
-        cache.set(cacheKey, result);
-        setTimeout(() => cache.delete(cacheKey), 3600000);
-        return result;
-      }
-    }
-    throw new Error("Failed to get download link");
-  } catch (error) {
-    console.error(`API fetch failed: ${error.message}`);
-    if (retries > 0) {
-      console.log(`Retrying API fetch... (${retries} left)`);
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      return fetchVideoData(url, format, retries - 1);
-    }
-    return null;
-  }
-}
-
-
-async function searchYouTube(query, maxResults = 1) {
-  const cacheKey = `search:${query}`;
-  if (cache.has(cacheKey)) {
-    return cache.get(cacheKey);
-  }
-
-  try {
-    const searchResults = await yts({ query, pages: 1 });
-    const videos = searchResults.videos.slice(0, maxResults);
-    cache.set(cacheKey, videos);
-    setTimeout(() => cache.delete(cacheKey), 1800000); 
-    return videos;
-  } catch (error) {
-    console.error(`Search error: ${error.message}`);
-    return [];
-  }
-}
-
-cmd(
-  {
-    pattern: "video",
-    alias: ["ytvideo4", "mp4", "ytmp4"],
-    react: "🎬",
-    desc: "Download enchanted videos from YouTube",
-    category: "ice kingdom",
-    filename: __filename,
-  },
-  async (robin, mek, m, { from, q, reply }) => {
-    try {
-      if (!q) return reply("GIVE ME THE VIDEO NAME OR URL");
-
-      
-      await robin.sendMessage(from, { react: { text: "🔍", key: mek.key } });
-
-      
-      const url = normalizeYouTubeUrl(q);
-      let ytdata;
-
-      if (url) {
-        const searchResults = await searchYouTube(url);
-        if (!searchResults.length) return reply("❌ Video not found!");
-        ytdata = searchResults[0];
-      } else {
-        const searchResults = await searchYouTube(q);
-        if (!searchResults.length) return reply("❌ No videos found matching your query!");
-        ytdata = searchResults[0];
-      }
-
-      
-      let desc = `
-VIDEO DOWNLOADER 🎬
-
-📌 *Title:* ${ytdata.title}
-🎬 *Channel:* ${ytdata.author.name}
-👁️ *Views:* ${ytdata.views}
-⏱️ *Duration:* ${ytdata.timestamp}
-🕒 *Uploaded:* ${ytdata.ago}
-🔗 *Link:* ${ytdata.url}
-
-🔢 *Reply with a number to select quality and format:*
-1. Video Format 🎥
-   1.1 - 144p
-   1.2 - 240p
-   1.3 - 360p
-   1.4 - 720p
-   1.5 - 1080p
-2. Document Format 📁
-   2.1 - 144p
-   2.2 - 240p
-   2.3 - 360p
-   2.4 - 720p
-   2.5 - 1080p
-`;
-
- 
-      const vv = await robin.sendMessage(
-        from,
-        { image: { url: ytdata.thumbnail }, caption: desc },
-        { quoted: mek }
-      );
-
-      
-      await robin.sendMessage(from, { react: { text: "✅", key: mek.key } });
-
-      
-      robin.ev.on("messages.upsert", async (msgUpdate) => {
-        const msg = msgUpdate.messages[0];
-        if (!msg.message || !msg.message.extendedTextMessage) return;
-
-        const selectedOption = msg.message.extendedTextMessage.text.trim();
-        if (
-          msg.message.extendedTextMessage.contextInfo &&
-          msg.message.extendedTextMessage.contextInfo.stanzaId === vv.key.id
-        ) {
-          try {
-            
-            const validOptions = [
-              "1.1",
-              "1.2",
-              "1.3",
-              "1.4",
-              "1.5",
-              "2.1",
-              "2.2",
-              "2.3",
-              "2.4",
-              "2.5",
-            ];
-            if (!validOptions.includes(selectedOption)) {
-              await robin.sendMessage(from, { react: { text: "❓", key: msg.key } });
-              return reply("Please reply with a valid option (e.g., 1.1, 2.3).");
-            }
-
-      
-            await robin.sendMessage(from, { react: { text: "⏳", key: msg.key } });
-
-            // Map selection to format
-            const formatMap = {
-              "1.1": "144",
-              "1.2": "240",
-              "1.3": "360",
-              "1.4": "720",
-              "1.5": "1080",
-              "2.1": "144",
-              "2.2": "240",
-              "2.3": "360",
-              "2.4": "720",
-              "2.5": "1080",
-            };
-            const format = formatMap[selectedOption];
-            const isDocument = selectedOption.startsWith("2");
-
-       
-            const data = await fetchVideoData(ytdata.url, format);
-            if (!data || !data.download_url) {
-              await robin.sendMessage(from, { react: { text: "❌", key: msg.key } });
-              return reply("❌ Download link not found! Try again later.");
-            }
-
-            const tempFile = await downloadAndValidateVideo(data.download_url);
-            if (!tempFile) {
-              await robin.sendMessage(from, { react: { text: "❌", key: msg.key } });
-              return reply("❌ Failed to download. The video file might be corrupted.");
-            }
-
-            if (isDocument) {
+        const apiUrl = `${VIDEO_API_URL}?url=${encodeURIComponent(url)}`;
+        const response = await axiosInstance.get(apiUrl);
         
-              await robin.sendMessage(
-                from,
-                {
-                  document: { url: tempFile },
-                  mimetype: "video/mp4",
-                  fileName: `${ytdata.title}_${format}p.mp4`,
-                  caption: `🎬 ${ytdata.title} - ${format}p (Document)`,
-                  contextInfo: {
-                    externalAdReply: {
-                      title: ytdata.title,
-                      body: `Video Downloader - ${format}p`,
-                      thumbnailUrl: data.thumbnail,
-                      sourceUrl: ytdata.url,
-                    },
-                  },
-                },
-                { quoted: msg }
-              );
-              await robin.sendMessage(from, { react: { text: "📁", key: msg.key } });
-            } else {
-              // Send as video
-              await robin.sendMessage(
-                from,
-                {
-                  video: { url: tempFile },
-                  mimetype: "video/mp4",
-                  fileName: `${ytdata.title}_${format}p.mp4`,
-                  caption: `🎬 ${ytdata.title} - ${format}p`,
-                  contextInfo: {
-                    externalAdReply: {
-                      title: ytdata.title,
-                      body: `Video Downloader - ${format}p`,
-                      thumbnailUrl: data.thumbnail,
-                      sourceUrl: ytdata.url,
-                    },
-                  },
-                },
-                { quoted: msg }
-              );
-              await robin.sendMessage(from, { react: { text: "🎥", key: msg.key } });
-            }
-
-    
-            await fs.unlink(tempFile).catch(() => {});
-          } catch (error) {
-            console.error("Download error:", error);
-            await robin.sendMessage(from, { react: { text: "❌", key: msg.key } });
-            reply(`⚠️ Error downloading: ${error.message}`);
-          }
+        if (!response.data?.status || !response.data.data) {
+            throw new Error('Invalid API response');
         }
-      });
-    } catch (e) {
-      console.error("Command error:", e);
-      await robin.sendMessage(from, { react: { text: "❌", key: mek.key } });
-      reply(`⚠️ *Error:* ${e.message || "Unknown error occurred"}`);
+        
+        return response.data.data;
+    } catch (error) {
+        console.error('Video API error:', error);
+        throw new Error('Failed to fetch video information');
     }
-  }
-);
+}
+
+// Utility function to download video
+async function downloadVideo(videoUrl) {
+    try {
+        const response = await axiosInstance.get(videoUrl, {
+            responseType: 'arraybuffer',
+            timeout: 60000,
+            onDownloadProgress: (progressEvent) => {
+                const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                console.log(`Download progress: ${percent}%`);
+            }
+        });
+        
+        return Buffer.from(response.data, 'binary');
+    } catch (error) {
+        console.error('Video download error:', error);
+        throw new Error('Failed to download video');
+    }
+}
+
+// Utility function to fetch thumbnail
+async function fetchThumbnail(thumbnailUrl) {
+    if (!thumbnailUrl) return null;
+    try {
+        const response = await axiosInstance.get(thumbnailUrl, { 
+            responseType: 'arraybuffer', 
+            timeout: 8000 
+        });
+        return Buffer.from(response.data, 'binary');
+    } catch (e) {
+        console.error('Thumbnail error:', e);
+        return null;
+    }
+}
+
+cmd({
+    pattern: "video",
+    alias: ["vid", "download", "ytvideo"],
+    desc: "Download videos from various platforms",
+    category: "download",
+    react: "🎬",
+    use: "<video URL>",
+    filename: __filename,
+}, async (conn, mek, m, { text, reply }) => {
+    try {
+        if (!text) {
+            await conn.sendMessage(mek.chat, { react: { text: '⚠️', key: mek.key } });
+            return reply('🎬 *Usage:* .video <video URL>\nExample: .video https://youtube.com/watch?v=ox4tmEV6-QU');
+        }
+
+        // Send processing reaction
+        await conn.sendMessage(mek.chat, { react: { text: '⏳', key: mek.key } });
+
+        // Fetch video info
+        const videoData = await fetchVideoInfo(text);
+        
+        // Check if button interface should be used
+        const useButtons = Config.BUTTON === true || Config.BUTTON === "true";
+
+        if (useButtons) {
+            // Button-based interface
+            try {
+                // Fetch thumbnail
+                const thumbnailBuffer = await fetchThumbnail(videoData.thumbnail);
+
+                // Generate unique session ID
+                const sessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+                // Prepare caption
+                const caption = `🎬 *Video Downloader*\n\n` +
+                    `📌 *Title*: ${videoData.title || 'Unknown'}\n` +
+                    `🔄 *Quality Options Available*\n\n` +
+                    `> Powered by Priyanshi Kaur API`;
+
+                // Create buttons message
+                const buttonsMessage = {
+                    image: thumbnailBuffer,
+                    caption: caption,
+                    footer: Config.FOOTER || 'Select download quality',
+                    buttons: [
+                        {
+                            buttonId: `video-high-${sessionId}-${encodeURIComponent(text)}`,
+                            buttonText: { displayText: '🎥 High Quality' },
+                            type: 1
+                        },
+                        {
+                            buttonId: `video-low-${sessionId}-${encodeURIComponent(text)}`,
+                            buttonText: { displayText: '📱 Low Quality' },
+                            type: 1
+                    }
+                    ],
+                    headerType: 1,
+                    contextInfo: {
+                        externalAdReply: {
+                            title: videoData.title || "Video Download",
+                            body: `Available in multiple qualities`,
+                            thumbnail: thumbnailBuffer,
+                            mediaType: 1,
+                            mediaUrl: text,
+                            sourceUrl: text
+                        }
+                    }
+                };
+
+                // Send message with buttons
+                const finalMsg = await conn.sendMessage(mek.chat, buttonsMessage, { quoted: mek });
+                const messageId = finalMsg.key.id;
+
+                // Button handler
+                const buttonHandler = async (msgData) => {
+                    const receivedMsg = msgData.messages[0];
+                    if (!receivedMsg.message?.buttonsResponseMessage) return;
+
+                    const buttonId = receivedMsg.message.buttonsResponseMessage.selectedButtonId;
+                    const senderId = receivedMsg.key.remoteJid;
+                    const isReplyToBot = receivedMsg.message.buttonsResponseMessage.contextInfo?.stanzaId === messageId;
+
+                    if (isReplyToBot && senderId === mek.chat && buttonId.includes(sessionId)) {
+                        conn.ev.off('messages.upsert', buttonHandler); // Remove listener
+
+                        await conn.sendMessage(mek.chat, { react: { text: '⏳', key: receivedMsg.key } });
+
+                        try {
+                            const isHighQuality = buttonId.startsWith(`video-high-${sessionId}`);
+                            const videoUrl = isHighQuality ? videoData.high : videoData.low;
+                            
+                            // Download the video
+                            await reply('```Downloading video... Please wait.📥```');
+                            const videoBuffer = await downloadVideo(videoUrl);
+                            
+                            const fileName = `${(videoData.title || 'video').replace(/[<>:"\/\\|?*]+/g, '')}.mp4`;
+
+                            // Send video
+                            await conn.sendMessage(mek.chat, {
+                                video: videoBuffer,
+                                caption: `🎬 *${videoData.title || 'Video'}*\n` +
+                                        `📏 *Quality*: ${isHighQuality ? 'High' : 'Low'}\n\n` +
+                                        `> Downloaded via ${Config.BOTNAME || 'Bot'}`,
+                                fileName: fileName
+                            }, { quoted: receivedMsg });
+
+                            await conn.sendMessage(mek.chat, { react: { text: '✅', key: receivedMsg.key } });
+                        } catch (error) {
+                            console.error('Video Download Error:', error);
+                            await conn.sendMessage(mek.chat, { react: { text: '❌', key: receivedMsg.key } });
+                            reply(`❌ Error: ${error.message || 'Download failed'}`);
+                        }
+                    }
+                };
+
+                // Add listener
+                conn.ev.on('messages.upsert', buttonHandler);
+
+                // Remove listener after 2 minutes
+                setTimeout(() => {
+                    conn.ev.off('messages.upsert', buttonHandler);
+                }, 120000);
+
+            } catch (error) {
+                console.error('Button interface error:', error);
+                // Fall back to text interface if button interface fails
+                await sendVideoDirectly();
+            }
+        } else {
+            // Text-based interface
+            await sendVideoDirectly();
+        }
+
+        async function sendVideoDirectly() {
+            // Ask for quality preference
+            await reply(`🎬 *${videoData.title || 'Video'}*\n\n` +
+                        `Please choose quality:\n` +
+                        `1 - High Quality 🎥\n` +
+                        `2 - Low Quality 📱\n\n` +
+                        `*Reply with 1 or 2*`);
+
+            // Set up response listener
+            const messageListener = async (messageUpdate) => {
+                try {
+                    const mekInfo = messageUpdate?.messages[0];
+                    if (!mekInfo?.message) return;
+
+                    const message = mekInfo.message;
+                    const messageType = message.conversation || message.extendedTextMessage?.text;
+                    const isReplyToOriginal = mekInfo.key.remoteJid === mek.chat;
+
+                    if (!isReplyToOriginal || !['1', '2'].includes(messageType?.trim())) return;
+
+                    // Immediately remove listener
+                    conn.ev.off('messages.upsert', messageListener);
+
+                    const isHighQuality = messageType.trim() === "1";
+                    const videoUrl = isHighQuality ? videoData.high : videoData.low;
+
+                    // Download the video
+                    await reply('```Downloading video... Please wait.📥```');
+                    const videoBuffer = await downloadVideo(videoUrl);
+                    
+                    const fileName = `${(videoData.title || 'video').replace(/[<>:"\/\\|?*]+/g, '')}.mp4`;
+
+                    // Send video
+                    await conn.sendMessage(mek.chat, {
+                        video: videoBuffer,
+                        caption: `🎬 *${videoData.title || 'Video'}*\n` +
+                                `📏 *Quality*: ${isHighQuality ? 'High' : 'Low'}\n\n` +
+                                `> Downloaded via ${Config.BOTNAME || 'Bot'}`,
+                        fileName: fileName
+                    }, { quoted: mek });
+
+                    // Send success reaction
+                    try {
+                        if (mekInfo?.key?.id) {
+                            await conn.sendMessage(mek.chat, { react: { text: "✅", key: mekInfo.key } });
+                        }
+                    } catch (reactError) {
+                        console.error('Success reaction failed:', reactError);
+                    }
+
+                } catch (error) {
+                    console.error('Download error:', error);
+                    reply('❌ Download failed: ' + (error.message || 'Network error'));
+                    try {
+                        if (mek?.key?.id) {
+                            await conn.sendMessage(mek.chat, { react: { text: "❌", key: mek.key } });
+                        }
+                    } catch (reactError) {
+                        console.error('Error reaction failed:', reactError);
+                    }
+                }
+            };
+
+            conn.ev.on('messages.upsert', messageListener);
+
+            // Remove listener after 2 minutes
+            setTimeout(() => {
+                conn.ev.off('messages.upsert', messageListener);
+            }, 120000);
+        }
+
+    } catch (error) {
+        console.error('Video Command Error:', error);
+        await conn.sendMessage(mek.chat, { react: { text: '❌', key: mek.key } });
+        reply(`❌ Error: ${error.message || 'Failed to process video'}`);
+    }
+});
