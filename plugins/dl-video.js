@@ -1,5 +1,6 @@
 const { cmd } = require('../command');
 const axios = require('axios');
+const yts = require('yt-search');
 const Config = require('../config');
 
 // Optimized axios instance
@@ -13,6 +14,40 @@ const axiosInstance = axios.create({
 
 // API configuration
 const VIDEO_API_URL = 'https://dev-priyanshi.onrender.com/api/alldl';
+
+// Utility function to search for YouTube videos
+async function searchYouTube(query) {
+    try {
+        const searchResults = await yts(query);
+        if (!searchResults?.videos?.length) {
+            throw new Error('No videos found for your search');
+        }
+        
+        // Filter out live streams and very long videos
+        const validVideos = searchResults.videos.filter(v => 
+            !v.live && v.seconds < 10800 && v.views > 1000
+        );
+        
+        if (!validVideos.length) {
+            throw new Error('Only found live streams or unsuitable videos');
+        }
+        
+        return validVideos[0].url; // Return URL of the first valid video
+    } catch (error) {
+        console.error('YouTube search error:', error);
+        throw new Error('Failed to search for videos');
+    }
+}
+
+// Utility function to check if text is a URL
+function isUrl(text) {
+    try {
+        new URL(text);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
 
 // Utility function to fetch video info
 async function fetchVideoInfo(url) {
@@ -67,24 +102,40 @@ async function fetchThumbnail(thumbnailUrl) {
 
 cmd({
     pattern: "video",
-    alias: ["vid", "download", "ytvideo"],
-    desc: "Download videos from various platforms",
+    alias: ["vid", "download", "ytvideo", "searchvideo"],
+    desc: "Download videos from various platforms or search YouTube",
     category: "download",
     react: "🎬",
-    use: "<video URL>",
+    use: "<video URL or search query>",
     filename: __filename,
 }, async (conn, mek, m, { text, reply }) => {
     try {
         if (!text) {
             await conn.sendMessage(mek.chat, { react: { text: '⚠️', key: mek.key } });
-            return reply('🎬 *Usage:* .video <video URL>\nExample: .video https://youtube.com/watch?v=ox4tmEV6-QU');
+            return reply('🎬 *Usage:* .video <video URL or search query>\n\n' +
+                        'Examples:\n' +
+                        `• ${Config.PREFIX}video https://youtube.com/watch?v=ox4tmEV6-QU\n` +
+                        `• ${Config.PREFIX}video Alan Walker Faded\n` +
+                        `• ${Config.PREFIX}video trending music videos`);
         }
 
         // Send processing reaction
         await conn.sendMessage(mek.chat, { react: { text: '⏳', key: mek.key } });
 
+        let videoUrl = text;
+        let isSearchResult = false;
+        let searchQuery = '';
+
+        // Check if input is a URL or search query
+        if (!isUrl(text)) {
+            isSearchResult = true;
+            searchQuery = text;
+            await reply(`🔍 *Searching for:* "${text}"\n\nPlease wait...`);
+            videoUrl = await searchYouTube(text);
+        }
+
         // Fetch video info
-        const videoData = await fetchVideoInfo(text);
+        const videoData = await fetchVideoInfo(videoUrl);
         
         // Check if button interface should be used
         const useButtons = Config.BUTTON === true || Config.BUTTON === "true";
@@ -99,10 +150,15 @@ cmd({
                 const sessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
                 // Prepare caption
-                const caption = `🎬 *Video Downloader*\n\n` +
-                    `📌 *Title*: ${videoData.title || 'Unknown'}\n` +
-                    `🔄 *Quality Options Available*\n\n` +
-                    `> Powered by Priyanshi Kaur API`;
+                let caption = `🎬 *Video Downloader*\n\n` +
+                            `📌 *Title*: ${videoData.title || 'Unknown'}\n`;
+                
+                if (isSearchResult) {
+                    caption += `🔍 *Searched for*: "${searchQuery}"\n`;
+                }
+                
+                caption += `🔄 *Quality Options Available*\n\n` +
+                         `> Powered by Mr Frank`;
 
                 // Create buttons message
                 const buttonsMessage = {
@@ -111,25 +167,25 @@ cmd({
                     footer: Config.FOOTER || 'Select download quality',
                     buttons: [
                         {
-                            buttonId: `video-high-${sessionId}-${encodeURIComponent(text)}`,
+                            buttonId: `video-high-${sessionId}-${encodeURIComponent(videoUrl)}`,
                             buttonText: { displayText: '🎥 High Quality' },
                             type: 1
                         },
                         {
-                            buttonId: `video-low-${sessionId}-${encodeURIComponent(text)}`,
+                            buttonId: `video-low-${sessionId}-${encodeURIComponent(videoUrl)}`,
                             buttonText: { displayText: '📱 Low Quality' },
                             type: 1
-                    }
+                        }
                     ],
                     headerType: 1,
                     contextInfo: {
                         externalAdReply: {
                             title: videoData.title || "Video Download",
-                            body: `Available in multiple qualities`,
+                            body: isSearchResult ? `Searched: ${searchQuery}` : `Available in multiple qualities`,
                             thumbnail: thumbnailBuffer,
                             mediaType: 1,
-                            mediaUrl: text,
-                            sourceUrl: text
+                            mediaUrl: videoUrl,
+                            sourceUrl: videoUrl
                         }
                     }
                 };
@@ -154,11 +210,11 @@ cmd({
 
                         try {
                             const isHighQuality = buttonId.startsWith(`video-high-${sessionId}`);
-                            const videoUrl = isHighQuality ? videoData.high : videoData.low;
+                            const selectedVideoUrl = isHighQuality ? videoData.high : videoData.low;
                             
                             // Download the video
                             await reply('```Downloading video... Please wait.📥```');
-                            const videoBuffer = await downloadVideo(videoUrl);
+                            const videoBuffer = await downloadVideo(selectedVideoUrl);
                             
                             const fileName = `${(videoData.title || 'video').replace(/[<>:"\/\\|?*]+/g, '')}.mp4`;
 
@@ -166,7 +222,8 @@ cmd({
                             await conn.sendMessage(mek.chat, {
                                 video: videoBuffer,
                                 caption: `🎬 *${videoData.title || 'Video'}*\n` +
-                                        `📏 *Quality*: ${isHighQuality ? 'High' : 'Low'}\n\n` +
+                                        `📏 *Quality*: ${isHighQuality ? 'High' : 'Low'}\n` +
+                                        (isSearchResult ? `🔍 *Searched*: "${searchQuery}"\n\n` : '\n') +
                                         `> Downloaded via ${Config.BOTNAME || 'Bot'}`,
                                 fileName: fileName
                             }, { quoted: receivedMsg });
@@ -199,12 +256,18 @@ cmd({
         }
 
         async function sendVideoDirectly() {
-            // Ask for quality preference
-            await reply(`🎬 *${videoData.title || 'Video'}*\n\n` +
-                        `Please choose quality:\n` +
-                        `1 - High Quality 🎥\n` +
-                        `2 - Low Quality 📱\n\n` +
-                        `*Reply with 1 or 2*`);
+            let qualityPrompt = `🎬 *${videoData.title || 'Video'}*\n\n`;
+            
+            if (isSearchResult) {
+                qualityPrompt += `🔍 *Searched for:* "${searchQuery}"\n\n`;
+            }
+            
+            qualityPrompt += `Please choose quality:\n` +
+                            `1 - High Quality 🎥\n` +
+                            `2 - Low Quality 📱\n\n` +
+                            `*Reply with 1 or 2*`;
+
+            await reply(qualityPrompt);
 
             // Set up response listener
             const messageListener = async (messageUpdate) => {
@@ -222,11 +285,11 @@ cmd({
                     conn.ev.off('messages.upsert', messageListener);
 
                     const isHighQuality = messageType.trim() === "1";
-                    const videoUrl = isHighQuality ? videoData.high : videoData.low;
+                    const selectedVideoUrl = isHighQuality ? videoData.high : videoData.low;
 
                     // Download the video
                     await reply('```Downloading video... Please wait.📥```');
-                    const videoBuffer = await downloadVideo(videoUrl);
+                    const videoBuffer = await downloadVideo(selectedVideoUrl);
                     
                     const fileName = `${(videoData.title || 'video').replace(/[<>:"\/\\|?*]+/g, '')}.mp4`;
 
@@ -234,7 +297,8 @@ cmd({
                     await conn.sendMessage(mek.chat, {
                         video: videoBuffer,
                         caption: `🎬 *${videoData.title || 'Video'}*\n` +
-                                `📏 *Quality*: ${isHighQuality ? 'High' : 'Low'}\n\n` +
+                                `📏 *Quality*: ${isHighQuality ? 'High' : 'Low'}\n` +
+                                (isSearchResult ? `🔍 *Searched*: "${searchQuery}"\n\n` : '\n') +
                                 `> Downloaded via ${Config.BOTNAME || 'Bot'}`,
                         fileName: fileName
                     }, { quoted: mek });
