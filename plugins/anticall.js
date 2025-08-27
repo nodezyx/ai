@@ -3,6 +3,7 @@ const config = require('../config');
 
 // Store to prevent message spam
 const recentCallers = new Set();
+let isAntiCallInitialized = false;
 
 // Simple button check function
 function shouldUseButtons() {
@@ -10,47 +11,7 @@ function shouldUseButtons() {
     return buttonStatus === "true" || buttonStatus === true;
 }
 
-// Anti-call system setup (call this in your main bot file)
-function setupAntiCallSystem(conn) {
-    console.log('🔒 Anti-call system initialized');
-    
-    conn.ev.on("call", async (callData) => {
-        try {
-            if (config.ANTICALL !== "true") return;
-
-            const calls = Array.isArray(callData) ? callData : [callData];
-            
-            for (const call of calls) {
-                if (call.status === "offer" && !call.fromMe) {
-                    console.log(`📵 Incoming call from: ${call.from}`);
-                    
-                    // Reject the call immediately
-                    await conn.rejectCall(call.id, call.from);
-                    console.log('✅ Call rejected');
-
-                    // Send warning message (once per user per session)
-                    if (!recentCallers.has(call.from)) {
-                        recentCallers.add(call.from);
-                        
-                        await conn.sendMessage(call.from, {
-                            text: `*📵 Call Rejected Automatically!*\n\n*Owner is busy, please do not call!* ⚠️\n\nSend a message instead for faster response.`
-                        });
-                        console.log('📩 Warning message sent');
-
-                        // Clear from recent callers after 10 minutes
-                        setTimeout(() => {
-                            recentCallers.delete(call.from);
-                        }, 10 * 60 * 1000);
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('❌ Anti-call error:', error);
-        }
-    });
-}
-
-// Anti-call command with button support
+// Anti-call command with button support AND built-in initialization
 cmd({
     pattern: "anticall",
     alias: ["antical"],
@@ -60,6 +21,12 @@ cmd({
     filename: __filename,
 }, async (conn, mek, m, { args, isOwner, reply, from }) => {
     if (!isOwner) return reply("*📛 Only the owner can use this command!*");
+
+    // Initialize anti-call system if not already done
+    if (!isAntiCallInitialized) {
+        setupAntiCallSystem(conn);
+        isAntiCallInitialized = true;
+    }
 
     const currentStatus = config.ANTICALL || "false";
     const isEnabled = currentStatus === "true";
@@ -176,5 +143,85 @@ cmd({
     }
 });
 
-// Export the setup function to be called in your main bot file
-module.exports = { setupAntiCallSystem };
+// Anti-call system implementation
+function setupAntiCallSystem(conn) {
+    console.log('🔒 Anti-call system initialized');
+    
+    conn.ev.on("call", async (callData) => {
+        try {
+            if (config.ANTICALL !== "true") {
+                console.log('📞 Anti-call is disabled, ignoring call');
+                return;
+            }
+
+            const calls = Array.isArray(callData) ? callData : [callData];
+            
+            for (const call of calls) {
+                if (call.status === "offer" && !call.fromMe) {
+                    console.log(`📵 Incoming call from: ${call.from}`);
+                    
+                    // Reject the call immediately
+                    await conn.rejectCall(call.id, call.from).catch(e => {
+                        console.log('⚠️ Could not reject call (might be already ended):', e.message);
+                    });
+                    console.log('✅ Call rejected');
+
+                    // Send warning message (once per user per session)
+                    if (!recentCallers.has(call.from)) {
+                        recentCallers.add(call.from);
+                        
+                        try {
+                            await conn.sendMessage(call.from, {
+                                text: `*📵 Call Rejected Automatically!*\n\n*Owner is busy, please do not call!* ⚠️\n\nSend a message instead for faster response.`
+                            });
+                            console.log('📩 Warning message sent');
+                        } catch (msgError) {
+                            console.log('⚠️ Could not send warning message:', msgError.message);
+                        }
+
+                        // Clear from recent callers after 10 minutes
+                        setTimeout(() => {
+                            recentCallers.delete(call.from);
+                            console.log(`🔄 Cleared caller from recent list: ${call.from}`);
+                        }, 10 * 60 * 1000);
+                    } else {
+                        console.log('⚠️ Already sent warning to this caller recently');
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('❌ Anti-call system error:', error.message);
+        }
+    });
+
+    // Also handle call events from different event formats
+    conn.ev.on("messages.upsert", async (data) => {
+        try {
+            if (config.ANTICALL !== "true") return;
+
+            const messages = data.messages;
+            if (messages && messages[0] && messages[0].message && messages[0].message.call) {
+                const call = messages[0].message.call;
+                if (call.callEnded) return; // Ignore ended calls
+                
+                console.log(`📵 Incoming call detected via message event: ${messages[0].key.remoteJid}`);
+                
+                if (!messages[0].key.fromMe) {
+                    await conn.rejectCall(call.callId, messages[0].key.remoteJid).catch(e => {
+                        console.log('⚠️ Could not reject call:', e.message);
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('❌ Call handling error in message event:', error.message);
+        }
+    });
+}
+
+// Auto-initialize when this file is loaded (if we have access to conn)
+if (typeof conn !== 'undefined') {
+    setupAntiCallSystem(conn);
+    isAntiCallInitialized = true;
+}
+
+// Export nothing since this is a complete standalone plugin
