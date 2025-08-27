@@ -219,7 +219,7 @@ async (conn, mek, m, { from, pushname, reply }) => {
         
     } catch (e) {
         console.error('Menu Error:', e);
-        reply(`❌ Error generating menu: ${error.message}`);
+        reply(`❌ Error generating menu: ${e.message}`);
     }
 });
 
