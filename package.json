@@ -1,6 +1,6 @@
 {
   "name": "SUBZERO-MD",
-  "version": "3.8.0",
+  "version": "5.0.1",
   "description": "THE BEST BOT IN THE UNIVERSE",
   "main": "index.js",
   "scripts": {
@@ -9,7 +9,7 @@
     "restart": "pm2 restart SUBZERO-MD"
   },
   "dependencies": {
-   "@whiskeysockets/baileys": "npm:qudbail",
+   "@whiskeysockets/baileys": "npm:@shennmine/baileys",
     "axios": "^1.7.9",
     "@adiwajshing/keyed-db": "latest",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
