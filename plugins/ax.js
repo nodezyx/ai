@@ -1,4 +1,4 @@
-const config = require('../config');
+/*const config = require('../config');
 const { cmd, commands } = require('../command');
 const os = require("os");
 const { runtime } = require('../lib/functions');
@@ -303,3 +303,4 @@ This bot is powered by Subzero-MD framework.
         }
     });
 }
+*/
