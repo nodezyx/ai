@@ -201,7 +201,7 @@ function generateCommandListSection(categoryName, cmds) {
     cmds.forEach((cmd, index) => {
         if (cmd.pattern) {
             const commandName = Array.isArray(cmd.pattern) ? cmd.pattern[0] : cmd.pattern;
-            const aliases = cmd.alias ? ` (${cmd.alias.join(', ')})` : '';
+            const aliases = cmd.alias && Array.isArray(cmd.alias) ? ` (${cmd.alias.join(', ')})` : '';
             const description = cmd.desc || "No description available";
             
             section += `│\n│ 🏮 *${config.PREFIX}${commandName}*${aliases}\n`;
@@ -262,7 +262,7 @@ cmd({
         const ram = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2);
         const totalMem = Math.round(os.totalmem() / 1024 / 1024);
         const uptime = runtime(process.uptime());
-        const totalCommands = commands.filter(c => c.pattern).length;
+        const totalCommands = commands.filter(c => c.pattern && !c.hideCommand).length;
         const harareTime = getHarareTime();
         
         const subzerox = {
@@ -285,8 +285,8 @@ cmd({
         // Filter and group commands
         const grouped = {};
         commands.forEach(cmd => {
-            if (!cmd.pattern || cmd.category.toLowerCase() === "menu" || cmd.hideCommand) return;
-            const cat = cmd.category.toUpperCase();
+            if (!cmd.pattern || cmd.hideCommand) return;
+            const cat = (cmd.category || 'MISC').toUpperCase();
             if (!grouped[cat]) grouped[cat] = [];
             grouped[cat].push(cmd);
         });
@@ -370,29 +370,38 @@ cmd({
         }
 
         const commandName = args[0].toLowerCase();
-        const command = commands.find(cmd => 
-            (cmd.pattern && (typeof cmd.pattern === 'string' ? cmd.pattern.toLowerCase() === commandName : 
-            Array.isArray(cmd.pattern) ? cmd.pattern.includes(commandName) : false)) ||
-            (cmd.alias && cmd.alias.includes(commandName))
-        );
+        const command = commands.find(cmd => {
+            if (!cmd.pattern) return false;
+            
+            // Check main pattern
+            const patterns = Array.isArray(cmd.pattern) ? cmd.pattern : [cmd.pattern];
+            const patternMatch = patterns.some(pattern => 
+                pattern.toLowerCase() === commandName
+            );
+            
+            // Check aliases
+            const aliasMatch = cmd.alias && Array.isArray(cmd.alias) ? 
+                cmd.alias.some(alias => alias.toLowerCase() === commandName) : false;
+            
+            return patternMatch || aliasMatch;
+        });
 
         if (!command) {
             return reply(`❌ Command "${commandName}" not found\nUse ${config.PREFIX}menu to see all commands`);
         }
 
         const commandPattern = Array.isArray(command.pattern) ? command.pattern[0] : command.pattern;
-        const aliases = command.alias ? `\n• Aliases: ${command.alias.join(', ')}` : '';
+        const aliases = command.alias && Array.isArray(command.alias) ? 
+            `\n• Aliases: ${command.alias.join(', ')}` : '';
         const category = command.category ? `\n• Category: ${command.category.toUpperCase()}` : '';
+        const usage = command.use ? `\n│\n│ 📌 *Usage:* \n│ • ${config.PREFIX}${commandPattern}${command.use}` : '';
 
         const helpText = `
 ╭───「 🆘 *COMMAND HELP* 」───
 │
 │ 🏮 *Command:* ${config.PREFIX}${commandPattern}
 │ 💡 *Description:* ${command.desc || 'No description available'}
-${aliases}${category}
-│
-│ 📌 *Usage:* 
-│ • ${config.PREFIX}${commandPattern}${command.use ? ` ${command.use}` : ''}
+${aliases}${category}${usage}
 │
 ╰───「 🚀 Need more help? Contact ${config.OWNER_NAME || "MR FRANK"} 」───
 `.trim();
