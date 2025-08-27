@@ -5,7 +5,7 @@ const {cmd , commands} = require('../command')
 
 
 cmd({
-    pattern: "button",
+    pattern: "buttonx",
     react: "🦄",
     desc: "downlod song",
     category: "downlod",
