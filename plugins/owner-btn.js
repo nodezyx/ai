@@ -4,8 +4,8 @@ const { setConfig, getConfig } = require("../lib/configdb");
 
 cmd({
     pattern: "buttons",
-    alias: ["togglebuttons", "buttonmode"],
-    react: "🔘",
+    alias: ["button", "buttonmode"],
+    react: "🔮",
     desc: "Enable or disable interactive buttons in the bot",
     category: "settings",
     filename: __filename,
