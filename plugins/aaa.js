@@ -65,7 +65,7 @@ async function sendAudio(conn, chat, audioBuffer, fileName, type, caption, quote
 cmd(
     {
         pattern: 'song',
-        alias: ['ytaudio', 'music'],
+        alias: ['ytaudio', 'play'],
         desc: 'High quality YouTube audio downloader',
         category: 'media',
         react: '🎵',
