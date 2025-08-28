@@ -103,7 +103,7 @@ cmd(
 ├─ ⏱️ Duration: ${videoInfo?.timestamp || 'Unknown'}
 ├─ 👁️ Views: ${videoInfo?.views?.toLocaleString() || 'Unknown'}
 ├─ 🕒 Published: ${videoInfo?.ago || 'Unknown'}
-├─ 🔗 URL: ${videoUrl || 'Unknown'}
+╰─ 🔗 URL: ${videoUrl || 'Unknown'}
 
 > Powered By Mr Frank `;
 
