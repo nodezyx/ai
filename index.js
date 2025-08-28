@@ -472,8 +472,12 @@ ${mrfrank}\n
             await conn.readMessages([mek.key]);
             console.log(`Marked message from ${mek.key.remoteJid} as read.`);
         }
+        // Status auto-seen
+        if (mek.key && mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_SEEN === "true") {
+            await conn.readMessages([mek.key]);
 
-        if (mek.message.viewOnceMessageV2)
+
+       /* if (mek.message.viewOnceMessageV2)
             mek.message = (getContentType(mek.message) === 'ephemeralMessage') ? mek.message.ephemeralMessage.message : mek.message;
 
         // Status auto-seen
@@ -516,9 +520,48 @@ ${mrfrank}\n
                 }
             }, { statusJidList: [mek.key.participant, jawadlike] });
         }
+        */
+
+        if(mek.message.viewOnceMessageV2)
+    mek.message = (getContentType(mek.message) === 'ephemeralMessage') ? mek.message.ephemeralMessage.message : mek.message
+    if (mek.key && mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_SEEN === "true"){
+      await conn.readMessages([mek.key])
+    }
+
+  const newsletterJids = [
+  "120363304325601080@newsletter",
+  "120363420122180789@newsletter",	  
+  "120363354023106228@newsletter",	  
+  "120363318387454868@newsletter"
+];
+  const emojis = ["❤️", "👍", "😮", "😎", "💀"];
+
+  if (mek.key && newsletterJids.includes(mek.key.remoteJid)) {
+    try {
+      const serverId = mek.newsletterServerId;
+      if (serverId) {
+      const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+        await conn.newsletterReactMessage(mek.key.remoteJid, serverId.toString(), emoji);
+      }
+    } catch (e) {
+    
+    }
+  }	  
+	  
+  if (mek.key && mek.key.remoteJid === 'status@broadcast' && config.AUTOSTATUSREACT === "true"){
+    const jawadlike = await conn.decodeJid(conn.user.id);
+    const emojis =  ['❤️', '🇿🇼', '😇', '🍂', '💥', '💯', '🔥', '💫', '💎', '💗', '🤍', '🖤', '👀', '🙌', '🙆', '🚩', '🥰', '💐', '😎', '🤎', '✅', '🫀', '🧡', '😁', '😄', '🌸', '🕊️', '🌷', '⛅', '🌟', '🗿', '🇵🇰', '💜', '💙', '🌝', '🖤', '💚'];
+    const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+    await conn.sendMessage(mek.key.remoteJid, {
+      react: {
+        text: randomEmoji,
+        key: mek.key,
+      } 
+    }, { statusJidList: [mek.key.participant, jawadlike] });
+  }                       
 
         // Status auto-reply
-        if (mek.key && mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_REPLY === "true") {
+        if (mek.key && mek.key.remoteJid === 'status@broadcast' && config.AUTOSTATUSREPLY === "true") {
             const user = mek.key.participant;
             const text = `${config.AUTOSTATUSMSG}`;
             await conn.sendMessage(user, { text: text, react: { text: '💜', key: mek.key } }, { quoted: mek });
