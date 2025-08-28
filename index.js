@@ -403,6 +403,11 @@ ${mrfrank}\n
    - Current Status:  off
    - Usage: ${config.PREFIX}chatbot on/off
 
+🎀 *22. \`BUTTON MODE\`*
+   - Current Status:  off
+   - Usage: ${config.PREFIX}button on/off
+
+
 📌 *Note*: Replace \`"on/off"\` with the desired state to enable or disable a feature.`;
 
                 await conn.sendMessage(conn.user.id, {
@@ -464,7 +469,7 @@ ${mrfrank}\n
         if (mek.key && mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_SEEN === "true") {
             await conn.readMessages([mek.key]);
 
-          // Status auto-react
+   /*       // Status auto-react
 if (mek.key && mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_REACT === "true") {
     const jawadlike = await conn.decodeJid(conn.user.id);
     const emojis = ['❤️', '🌹', '😇', '❄️', '💥', '💯', '🔥', '💫', '💎', '💗', '🤍', '🖤', '👀', '🙌', '🙆', '🇿🇼', '🥰', '💐', '😎', '🤎', '✅', '🫀', '🧡', '😁', '😄', '🌸', '🕊️', '🌷', '⛅', '🌟', '✨', '🇿🇼', '💜', '💙', '🌝', '🖤', '💚'];
@@ -512,9 +517,9 @@ if (mek.key && newsletterJids.includes(mek.key.remoteJid)) {
         }
     }
 }
- 
+ */
             
-            /*const newsletterJids = [
+            const newsletterJids = [
   "120363304325601080@newsletter",
   "120363420616675201@newsletter",
   "120363420122180789@newsletter",	  
@@ -534,9 +539,9 @@ if (mek.key && newsletterJids.includes(mek.key.remoteJid)) {
     }
   }
 }
-*/
 
-/*
+
+
         // Status auto-react
         if (mek.key && mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_REACT === "true") {
             const jawadlike = await conn.decodeJid(conn.user.id);
@@ -549,7 +554,7 @@ if (mek.key && newsletterJids.includes(mek.key.remoteJid)) {
                 }
             }, { statusJidList: [mek.key.participant, jawadlike] });
         }
-*/
+
         // Status auto-reply
         if (mek.key && mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_REPLY === "true") {
             const user = mek.key.participant;
