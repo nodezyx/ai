@@ -403,11 +403,6 @@ ${mrfrank}\n
    - Current Status:  off
    - Usage: ${config.PREFIX}chatbot on/off
 
-🎀 *22. \`BUTTON MODE\`*
-   - Current Status:  off
-   - Usage: ${config.PREFIX}button on/off
-
-
 📌 *Note*: Replace \`"on/off"\` with the desired state to enable or disable a feature.`;
 
                 await conn.sendMessage(conn.user.id, {
@@ -469,57 +464,8 @@ ${mrfrank}\n
         if (mek.key && mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_SEEN === "true") {
             await conn.readMessages([mek.key]);
 
-   /*       // Status auto-react
-if (mek.key && mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_REACT === "true") {
-    const jawadlike = await conn.decodeJid(conn.user.id);
-    const emojis = ['❤️', '🌹', '😇', '❄️', '💥', '💯', '🔥', '💫', '💎', '💗', '🤍', '🖤', '👀', '🙌', '🙆', '🇿🇼', '🥰', '💐', '😎', '🤎', '✅', '🫀', '🧡', '😁', '😄', '🌸', '🕊️', '🌷', '⛅', '🌟', '✨', '🇿🇼', '💜', '💙', '🌝', '🖤', '💚'];
-    const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
-    
-    try {
-        await conn.sendMessage(mek.key.remoteJid, {
-            react: {
-                text: randomEmoji,
-                key: mek.key,
-            }
-        });
-    } catch (reactError) {
-        console.error('Failed to react to status:', reactError);
-    }
-}
-
-// Newsletter react (fix this section)
-const newsletterJids = [
-    "120363304325601080@newsletter",
-    "120363420616675201@newsletter", 
-    "120363420122180789@newsletter",	  
-    "120363318387454868@newsletter"
-];
-const emojis = ["❤️", "🔥", "😯"];
-
-if (mek.key && newsletterJids.includes(mek.key.remoteJid)) {
-    try {
-        const serverId = mek.newsletterServerId;
-        if (serverId) {
-            const emoji = emojis[Math.floor(Math.random() * emojis.length)];
-            await conn.newsletterReactMessage(mek.key.remoteJid, serverId.toString(), emoji);
-            console.log(`✅ Reacted to newsletter message with ${emoji}`);
-        }
-    } catch (newsletterError) {
-        console.error('Failed to react to newsletter:', newsletterError);
-        // Check if it's a permission error
-        if (newsletterError.message.includes('not a follower')) {
-            try {
-                await conn.newsletterFollow(mek.key.remoteJid);
-                console.log(`✅ Followed newsletter: ${mek.key.remoteJid}`);
-            } catch (followError) {
-                console.error('Failed to follow newsletter:', followError);
-            }
-        }
-    }
-}
- */
-            
-            const newsletterJids = [
+          
+  const newsletterJids = [
   "120363304325601080@newsletter",
   "120363420616675201@newsletter",
   "120363420122180789@newsletter",	  
