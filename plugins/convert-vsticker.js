@@ -40,7 +40,7 @@ cmd(
 
       // Generate sticker metadata
       const sticker = new Sticker(webpBuffer, {
-        pack: config.STICKER_NAME || 'Mr Franm OFC',
+        pack: config.STICKER_NAME || 'Mr Frank OFC',
         author: '', // Leave blank or customize
         type: StickerTypes.FULL, // FULL for regular stickers
         categories: ['🤩', '🎉'], // Emoji categories
