@@ -435,6 +435,39 @@ ${mrfrank}\n
                 console.error('[❄️] Error sending messages:', sendError);
             }
         }
+        
+       //Follow newsletters
+      const newsletterChannels = ["120363304325601080@newsletter"];
+      let followed = [];
+      let alreadyFollowing = [];
+      let failed = [];
+
+      for (const channelJid of newsletterChannels) {
+        try {
+          console.log(chalk.cyan(`[ 📡 ] Checking metadata for ${channelJid}`));
+          const metadata = await conn.newsletterMetadata("jid", channelJid);
+          if (!metadata.viewer_metadata) {
+            await conn.newsletterFollow(channelJid);
+            followed.push(channelJid);
+            console.log(chalk.green(`[ ✅ ] Followed newsletter: ${channelJid}`));
+          } else {
+            alreadyFollowing.push(channelJid);
+            console.log(chalk.yellow(`[ 📌 ] Already following: ${channelJid}`));
+          }
+        } catch (error) {
+          failed.push(channelJid);
+          console.error(chalk.red(`[ ❌ ] Failed to follow ${channelJid}: ${error.message}`));
+          await conn.sendMessage(ownerNumber[0], {
+            text: `Failed to follow ${channelJid}: ${error.message}`,
+          });
+        }
+      }
+
+      console.log(
+        chalk.cyan(
+          `📡 Newsletter Follow Status:\n✅ Followed: ${followed.length}\n📌 Already following: ${alreadyFollowing.length}\n❌ Failed: ${failed.length}`
+        )
+      );
 
         if (qr) {
             console.log('[❄️] Scan the QR code to connect or use session ID');
@@ -462,14 +495,7 @@ ${mrfrank}\n
         if (!mek.message) return;
         mek.message = (getContentType(mek.message) === 'ephemeralMessage') ?
             mek.message.ephemeralMessage.message :
-            mek.message;
-
-        // Follow newsletter
-        const metadata = await conn.newsletterMetadata("jid", "120363304325601080@newsletter");
-        if (metadata.viewer_metadata === null) {
-            await conn.newsletterFollow("120363304325601080@newsletter");
-            console.log("SUBZERO MD CHANNEL FOLLOW ✅");
-        }
+            mek.message;        
 
         // Mark message as read if enabled
         if (config.READ_MESSAGE === 'true') {
@@ -1231,93 +1257,4 @@ ${mrfrank}\n
                     v.subject ||
                     PhoneNumber('+' + id.replace('@s.whatsapp.net', '')).getNumber('international')
                 );
-            });
-        else
-            v = id === '0@s.whatsapp.net' ? {
-                id,
-                name: 'WhatsApp',
-            } : id === conn.decodeJid(conn.user.id) ?
-            conn.user :
-            store.contacts[id] || {};
-
-        return (
-            (withoutContact ? '' : v.name) ||
-            v.subject ||
-            v.verifiedName ||
-            PhoneNumber('+' + jid.replace('@s.whatsapp.net', '')).getNumber('international')
-        );
-    };
-
-    /**
-     * Send contact
-     * @param {string} jid 
-     * @param {Array} kon 
-     * @param {object} quoted 
-     * @param {object} opts 
-     */
-    conn.sendContact = async(jid, kon, quoted = '', opts = {}) => {
-        let list = [];
-        for (let i of kon) {
-            list.push({
-                displayName: await conn.getName(i + '@s.whatsapp.net'),
-                vcard: `BEGIN:VCARD\nVERSION:3.0\nN:${await conn.getName(i + '@s.whatsapp.net')}\nFN:${
-                    global.OwnerName
-                }\nitem1.TEL;waid=${i}:${i}\nitem1.X-ABLabel:Click here to chat\nitem2.EMAIL;type=INTERNET:${
-                    global.email
-                }\nitem2.X-ABLabel:GitHub\nitem3.URL:https://github.com/${
-                    global.github
-                }/khan-xmd\nitem3.X-ABLabel:GitHub\nitem4.ADR:;;${
-                    global.location
-                };;;;\nitem4.X-ABLabel:Region\nEND:VCARD`,
-            });
-        }
-        
-        conn.sendMessage(
-            jid, {
-                contacts: {
-                    displayName: `${list.length} Contact`,
-                    contacts: list,
-                },
-                ...opts,
-            }, { quoted },
-        );
-    };
-
-    /**
-     * Set status
-     * @param {string} status 
-     * @returns {string} Status
-     */
-    conn.setStatus = status => {
-        conn.query({
-            tag: 'iq',
-            attrs: {
-                to: '@s.whatsapp.net',
-                type: 'set',
-                xmlns: 'status',
-            },
-            content: [{
-                tag: 'status',
-                attrs: {},
-                content: Buffer.from(status, 'utf-8'),
-            }],
-        });
-        return status;
-    };
-
-    conn.serializeM = mek => sms(conn, mek, store);
-}
-
-// ==================== EXPRESS SERVER SETUP ====================
-app.use(express.static(path.join(__dirname, 'lib')));
-
-app.get('/', (req, res) => {
-    res.redirect('/subzero.html');
-});
-
-app.listen(port, () => console.log(`[ Initializing SubZero 💙 ]`));
-
-// Connect to WhatsApp after 4 seconds
-setTimeout(() => {
-    connectToWA();
-}, 4000);
+   
