@@ -437,7 +437,7 @@ ${mrfrank}\n
         }
 
         if (qr) {
-            console.log('[❄️] Scan the QR code to connect or use session ID');
+            console.log('[❄️]  Get session ID please!');
         }
     });
 
@@ -542,7 +542,7 @@ const newsletterJids = [
         const sender = mek.key.fromMe ? (conn.user.id.split(':')[0] + '@s.whatsapp.net' || conn.user.id) : (mek.key.participant || mek.key.remoteJid);
         const senderNumber = sender.split('@')[0];
         const botNumber = conn.user.id.split(':')[0];
-        const pushname = mek.pushName || 'Sin Nombre';
+        const pushname = mek.pushName || 'SUBZERO-MD USER;
         const isMe = botNumber.includes(senderNumber);
         const isOwner = ownerNumber.includes(senderNumber) || isMe;
         const botNumber2 = await jidNormalizedUser(conn.user.id);
@@ -570,7 +570,7 @@ const newsletterJids = [
         if (isCreator && mek.text.startsWith("&")) {
             let code = budy.slice(2);
             if (!code) {
-                reply(`Provide me with a query to run Master!`);
+                reply(`Mr Frank, Provide me with a query to run Master!`);
                 return;
             }
             const { spawn } = require("child_process");
@@ -599,7 +599,7 @@ const newsletterJids = [
         // Developer react
         if (senderNumber.includes("263719647303")) {
             if (isReact) return;
-            m.react("🇿🇼");
+            m.react("🫟");
         }
 
         // Auto react for public messages
