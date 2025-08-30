@@ -281,6 +281,7 @@ cmd(
             let media = await mek.quoted.download();
             let sticker = new Sticker(media, {
                 pack: pack, 
+                author: 'Subzero', // Leave blank or customize
                 type: StickerTypes.FULL,
                 categories: ["🤩", "🎉"], 
                 id: "12345",
