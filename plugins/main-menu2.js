@@ -201,7 +201,7 @@ const fake = {
   },
   message: {
     contactMessage: {
-      displayName: "Mr Frank",
+      displayName: "ＭＲ ＦＲＡＮＫ ＯＦＣ",
       vcard: "BEGIN:VCARD\nVERSION:3.0\nFN:Meta AI\nTEL;type=CELL:+13135550002\nEND:VCARD",
       jpegThumbnail: metaIconBuffer
     }
