@@ -486,34 +486,23 @@ if (mek.key && mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_SE
     await conn.readMessages([mek.key]);
 }
 
-// NEW: Newsletter Auto React (add this after status auto-seen)
-if (mek.key && mek.key.remoteJid && mek.key.remoteJid.includes('@newsletter')) {
-    const newsletterJids = [
-        "120363304325601080@newsletter",
-        "120363420616675201@newsletter"
-    ];
-    const emojis = ["❤️", "🔥", "😯", "❄️", "💫", "🌟"];
+const newsletterJids = [
+  "120363304325601080@newsletter"
+];
+  const emojis = ["❤️", "👍", "😮", "😎", "💀"];
 
-    if (newsletterJids.includes(mek.key.remoteJid) && config.AUTO_NEWSLETTER_REACT === "true") {
-        try {
-            // Try different possible properties for server ID
-            const serverId = mek.newsletterServerId || mek.key.id || mek.serverId;
-            
-            if (serverId) {
-                const emoji = emojis[Math.floor(Math.random() * emojis.length)];
-                await conn.newsletterReactMessage(mek.key.remoteJid, serverId.toString(), emoji);
-                console.log(`[NEWSLETTER] Reacted with ${emoji} to newsletter message`);
-            } else {
-                console.log('[NEWSLETTER] No serverId found for reaction');
-            }
-        } catch (e) {
-            console.error('[NEWSLETTER REACT ERROR]', e.message);
-            // Don't throw, just log the error
-        }
+  if (mek.key && newsletterJids.includes(mek.key.remoteJid)) {
+    try {
+      const serverId = mek.newsletterServerId;
+      if (serverId) {
+      const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+        await conn.newsletterReactMessage(mek.key.remoteJid, serverId.toString(), emoji);
+      }
+    } catch (e) {
+    
     }
-}
-
-
+                  }
+        
 
         // Status auto-react
         if (mek.key && mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_REACT === "true") {
