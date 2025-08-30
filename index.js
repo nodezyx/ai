@@ -487,9 +487,8 @@ ${mrfrank}\n
           
   const newsletterJids = [
   "120363304325601080@newsletter",
-  "120363420616675201@newsletter",
-  "120363420122180789@newsletter",	  
-  "120363318387454868@newsletter"
+  "120363420616675201@newsletter"
+  
 ];
   const emojis = ["❤️", "🔥", "😯"];
 
