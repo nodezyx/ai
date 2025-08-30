@@ -141,7 +141,7 @@ cmd({
                 const caption = `📸 *Instagram Video Downloader*\n\n` +
                               `📌 *Title*: ${videoData.title}\n` +
                               `🔄 *Quality Options Available*\n\n` +
-                              `> Powered by Priyanshi Kaur API`;
+                              `> Powered by Mr Frank`;
 
                 // Create buttons message
                 const buttonsMessage = {
