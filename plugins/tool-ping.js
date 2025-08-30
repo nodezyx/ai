@@ -71,36 +71,34 @@ cmd({
 }, async (conn, mek, m, { from }) => {
   try {
     const start = Date.now();
+
     // Send initial message with Subzero quoted style
     await conn.sendMessage(from, {
       text: "```Testing latency...⌛️```",
       contextInfo: {
         quotedMessage: ai.message,
-        mentionedJid: [mek.sender],
-        forwardingScore: 999,
-        isForwarded: true
+        mentionedJid: [mek.sender]
       }
     });
+
     const speed = Date.now() - start;
+
     // Send result with Subzero quoted style
     await conn.sendMessage(from, {
       text: `\`\`\`Pong ${speed}ms\`\`\``,
       contextInfo: {
         quotedMessage: ai.message,
-        mentionedJid: [mek.sender],
-        forwardingScore: 999,
-        isForwarded: true
+        mentionedJid: [mek.sender]
       }
     });
+
   } catch (e) {
     console.error("Ping command error:", e);
     await conn.sendMessage(from, {
       text: `❌ Error: ${e.message}`,
       contextInfo: {
         quotedMessage: ai.message,
-        mentionedJid: [mek.sender],
-        forwardingScore: 999,
-        isForwarded: true
+        mentionedJid: [mek.sender]
       }
     });
   }
