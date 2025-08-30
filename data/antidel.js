@@ -9,9 +9,17 @@ const AntiDelDB = DATABASE.define('AntiDelete', {
         autoIncrement: false,
         defaultValue: 1,
     },
-    status: {
+    gc_status: {
         type: DataTypes.BOOLEAN,
-        defaultValue: config.ANTIDELETE || false,
+        defaultValue: config.ANTIDELETE?.gc || false,
+    },
+    dm_status: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: config.ANTIDELETE?.dm || false,
+    },
+    status_status: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: config.ANTIDELETE?.status || false,
     },
 }, {
     tableName: 'antidelete',
@@ -30,22 +38,15 @@ async function initializeAntiDeleteSettings() {
         // First sync the model to ensure table exists
         await AntiDelDB.sync();
         
-        // Check if old schema exists
-        const tableInfo = await DATABASE.getQueryInterface().describeTable('antidelete');
-        if (tableInfo.gc_status) {
-            // Migrate from old schema to new schema
-            const oldRecord = await DATABASE.query('SELECT * FROM antidelete WHERE id = 1', { type: DATABASE.QueryTypes.SELECT });
-            if (oldRecord && oldRecord.length > 0) {
-                const newStatus = oldRecord[0].gc_status || oldRecord[0].dm_status;
-                await DATABASE.query('DROP TABLE antidelete');
-                await AntiDelDB.sync();
-                await AntiDelDB.create({ id: 1, status: newStatus });
-            }
-        } else {
-            // Create new record if doesn't exist
-            await AntiDelDB.findOrCreate({
-                where: { id: 1 },
-                defaults: { status: config.ANTIDELETE || false },
+        // Check if record exists
+        const record = await AntiDelDB.findByPk(1);
+        if (!record) {
+            // Create new record with default values
+            await AntiDelDB.create({ 
+                id: 1, 
+                gc_status: config.ANTIDELETE?.gc || false,
+                dm_status: config.ANTIDELETE?.dm || false,
+                status_status: config.ANTIDELETE?.status || false
             });
         }
         isInitialized = true;
@@ -54,16 +55,24 @@ async function initializeAntiDeleteSettings() {
         // If table doesn't exist at all, create it
         if (error.original && error.original.code === 'SQLITE_ERROR' && error.original.message.includes('no such table')) {
             await AntiDelDB.sync();
-            await AntiDelDB.create({ id: 1, status: config.ANTIDELETE || false });
+            await AntiDelDB.create({ 
+                id: 1, 
+                gc_status: config.ANTIDELETE?.gc || false,
+                dm_status: config.ANTIDELETE?.dm || false,
+                status_status: config.ANTIDELETE?.status || false
+            });
             isInitialized = true;
         }
     }
 }
 
-async function setAnti(status) {
+async function setAnti(type, status) {
     try {
         await initializeAntiDeleteSettings();
-        const [affectedRows] = await AntiDelDB.update({ status }, { where: { id: 1 } });
+        const updateData = {};
+        updateData[`${type}_status`] = status;
+        
+        const [affectedRows] = await AntiDelDB.update(updateData, { where: { id: 1 } });
         return affectedRows > 0;
     } catch (error) {
         console.error('Error setting anti-delete status:', error);
@@ -71,14 +80,16 @@ async function setAnti(status) {
     }
 }
 
-async function getAnti() {
+async function getAnti(type) {
     try {
         await initializeAntiDeleteSettings();
         const record = await AntiDelDB.findByPk(1);
-        return record ? record.status : (config.ANTIDELETE || false);
+        if (!record) return false;
+        
+        return record[`${type}_status`];
     } catch (error) {
         console.error('Error getting anti-delete status:', error);
-        return config.ANTIDELETE || false;
+        return false;
     }
 }
 
