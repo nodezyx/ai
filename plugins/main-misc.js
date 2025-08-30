@@ -1,5 +1,5 @@
 const { cmd } = require('../command');
-const { getAnti, setAnti, initializeAntiDeleteSettings } = require('../data/antidel');
+const { getAnti, setAnti, getAllAnti, initializeAntiDeleteSettings } = require('../data/antidel');
 
 initializeAntiDeleteSettings();
 
@@ -43,22 +43,20 @@ async (conn, mek, m, { from, reply, q, text, isCreator }) => {
                 await setAnti('status', !st);
                 return reply(`🕒 Status AntiDelete ${!st ? 'enabled' : 'disabled'}.`);
 
-            case 'status check':
             case 'check':
-                const gcStatus = await getAnti('gc');
-                const dmStatus = await getAnti('dm');
-                const statusStatus = await getAnti('status');
+            case 'status check':
+                const allStatus = await getAllAnti();
                 return reply(
 `📊 *AntiDelete Status:*
 
-👥 Group Chats: ${gcStatus ? '✅ Enabled' : '❌ Disabled'}
-📥 Direct Messages: ${dmStatus ? '✅ Enabled' : '❌ Disabled'}
-🕒 Status Updates: ${statusStatus ? '✅ Enabled' : '❌ Disabled'}`
+👥 Group Chats: ${allStatus.gc ? '✅ Enabled' : '❌ Disabled'}
+📥 Direct Messages: ${allStatus.dm ? '✅ Enabled' : '❌ Disabled'}
+🕒 Status Updates: ${allStatus.status ? '✅ Enabled' : '❌ Disabled'}`
                 );
 
             default:
                 return reply(`
-\`🔐 *ANTIDELETE  GUIDE* 🔐\`
+\`🔐 *ANTIDELETE GUIDE* 🔐\`
 
 ╭──❮ Main Toggles ❯─⟡
 ├ • 🟢 \`.antidelete on\` – Enable all (gc, dm, status)
