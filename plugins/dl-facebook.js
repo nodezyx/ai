@@ -133,7 +133,7 @@ cmd({
                 const caption = `📥 *Facebook Video Downloader*\n\n` +
                               `📌 *Title*: ${videoData.title || 'Facebook Video'}\n` +
                               `🔄 *Quality Options Available*\n\n` +
-                              `> Powered by Priyanshi Kaur API`;
+                              `> Powered by Mr Frank`;
 
                 // Create buttons message
                 const buttonsMessage = {
