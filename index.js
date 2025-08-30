@@ -319,6 +319,10 @@ ${mrfrank}\n
     \`\`\`SUBZERO BOT SETTINGS\`\`\`
     ----------------------------------------
     
+🪀 *• \`Button Mode\`*
+   - Current Status: ${config.BUTTON|| "off"}
+   - Usage: ${config.PREFIX}button on/off
+
 🔧 *1. \`Mode.\`*
    - Current Status: ${config.MODE || "public"}
    - Usage: ${config.PREFIX}mode private/public
