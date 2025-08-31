@@ -9,7 +9,7 @@
     "restart": "pm2 restart SUBZERO-MD"
   },
   "dependencies": {
-   "@whiskeysockets/baileys": "^6.7.19",
+   "@whiskeysockets/baileys": "npm:baileys-pro@latest",
     "axios": "^1.7.9",
     "@adiwajshing/keyed-db": "latest",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
