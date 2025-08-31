@@ -29,6 +29,19 @@ const {
 
 const l = console.log;
 const { getBuffer, getGroupAdmins, getRandom, h2k, isUrl, Json, runtime, sleep, fetchJson } = require('./lib/functions');
+
+// ==================== UTILITY FUNCTIONS ====================
+function parseCommand(body, prefix) {
+    if (!body.startsWith(prefix)) return null;
+    
+    const cleanBody = body.slice(prefix.length).trim();
+    const parts = cleanBody.split(' ');
+    const command = parts[0].toLowerCase();
+    const args = parts.slice(1);
+    
+    return { command, args, full: cleanBody };
+}
+
 const { AntiDelDB, initializeAntiDeleteSettings, setAnti, getAnti, getAllAntiDeleteSettings, saveContact, loadMessage, getName, getChatSummary, saveGroupMetadata, getGroupMetadata, saveMessageCount, getInactiveGroupMembers, getGroupMembersMessageCount, saveMessage } = require('./data');
 const fs = require('fs');
 const ff = require('fluent-ffmpeg');
@@ -655,7 +668,7 @@ const newsletterJids = [
         if (!isRealOwner && isGroup && config.MODE === "inbox") return;
         if (!isRealOwner && !isGroup && config.MODE === "groups") return;
 
-        // Handle commands
+     /*   // Handle commands
         const events = require('./command');
         const cmdName = isCmd ? body.slice(1).trim().split(" ")[0].toLowerCase() : false;
         if (isCmd) {
@@ -676,6 +689,52 @@ const newsletterJids = [
                     console.error("[PLUGIN ERROR] " + e);
                 }
             }
+        }
+        */
+        if (isCmd) {
+    console.log(`[CMD] Received command: ${command} from ${sender}`);
+    
+    const cmd = events.commands.find((cmd) => cmd.pattern === (cmdName)) || 
+                events.commands.find((cmd) => cmd.alias && cmd.alias.includes(cmdName));
+    
+    if (cmd) {
+        console.log(`[CMD] Found command: ${cmd.pattern}`);
+        
+        if (cmd.react) {
+            try {
+                await conn.sendMessage(from, { react: { text: cmd.react, key: mek.key } });
+            } catch (reactError) {
+                console.error("[REACT ERROR]", reactError);
+            }
+        }
+
+        try {
+            await cmd.function(conn, mek, m, { 
+                from, quoted, body, isCmd, command, args, q, text, 
+                isGroup, sender, senderNumber, botNumber2, botNumber, 
+                pushname, isMe, isOwner, isCreator, groupMetadata, 
+                groupName, participants, groupAdmins, isBotAdmins, 
+                isAdmins, reply 
+            });
+        } catch (e) {
+            console.error("[CMD ERROR]", e);
+            try {
+                await reply(`❌ Command error: ${e.message || 'Unknown error'}`);
+            } catch (replyError) {
+                console.error("[REPLY ERROR]", replyError);
+            }
+        }
+    } else {
+        console.log(`[CMD] Command not found: ${command}`);
+        try {
+            await reply(`❌ Command *${command}* doesn't exist!\nUse *${prefix}help* to see available commands.`);
+        } catch (replyError) {
+            console.error("[REPLY ERROR]", replyError);
+        }
+    }
+    
+    // Return after processing command to prevent other handlers from interfering
+    return;
         }
 
         // Handle other event types
