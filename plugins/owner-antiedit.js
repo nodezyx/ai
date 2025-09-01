@@ -1,10 +1,58 @@
 const { cmd } = require("../command");
 
+let antiEditEnabled = false;
+if (!global.msgStore) global.msgStore = {};
+
+// Store every incoming message
+const registerAntiEditListener = (client) => {
+  client.ev.on("messages.upsert", async (m) => {
+    const msg = m.messages[0];
+    if (!msg.message || msg.key.fromMe) return;
+
+    global.msgStore[msg.key.id] =
+      msg.message?.conversation ||
+      msg.message?.extendedTextMessage?.text ||
+      msg.message?.imageMessage?.caption ||
+      msg.message?.videoMessage?.caption ||
+      "[media]";
+  });
+
+  // Listen for edits
+  client.ev.on("messages.update", async (updates) => {
+    if (!antiEditEnabled) return;
+
+    for (const update of updates) {
+      try {
+        if (update.update?.editedMessage) {
+          const key = update.key;
+          const jid = key.remoteJid;
+
+          const oldMessage = global.msgStore?.[key.id];
+          const newMessage =
+            update.update.editedMessage.message?.conversation ||
+            update.update.editedMessage.message?.extendedTextMessage?.text ||
+            update.update.editedMessage.message?.imageMessage?.caption ||
+            update.update.editedMessage.message?.videoMessage?.caption ||
+            "[media]";
+
+          if (oldMessage && oldMessage !== newMessage) {
+            await client.sendMessage(jid, {
+              text: `✍️ *Anti-Edit Alert!*\n\n*Original:* ${oldMessage}\n*Edited:* ${newMessage}`
+            });
+          }
+        }
+      } catch (e) {
+        console.error("AntiEdit Error:", e);
+      }
+    }
+  });
+};
+
 cmd({
   pattern: "antiedit",
-  alias: ["aedit", "edited"],
+  alias: ["aedit", "toggleedit"],
   react: '✍️',
-  desc: "Owner Only - recover original edited messages",
+  desc: "Owner Only - toggle anti-edit on/off",
   category: "owner",
   filename: __filename
 }, async (client, message, match, { from, isCreator }) => {
@@ -15,50 +63,29 @@ cmd({
       }, { quoted: message });
     }
 
-    if (!match.quoted) {
+    if (match && match.trim().toLowerCase() === "on") {
+      antiEditEnabled = true;
+      registerAntiEditListener(client);
       return await client.sendMessage(from, {
-        text: "*🍁 Please reply to an edited message!*"
+        text: "✅ Anti-Edit has been *ENABLED*."
       }, { quoted: message });
     }
 
-    if (!match.quoted?.contextInfo?.quotedMessage) {
+    if (match && match.trim().toLowerCase() === "off") {
+      antiEditEnabled = false;
       return await client.sendMessage(from, {
-        text: "❌ No original content found for this edited message."
+        text: "❌ Anti-Edit has been *DISABLED*."
       }, { quoted: message });
     }
 
-    let original = match.quoted.contextInfo.quotedMessage;
-    let messageContent = {};
-    const options = { quoted: message };
-
-    if (original.conversation) {
-      messageContent = { text: original.conversation };
-    } else if (original.extendedTextMessage) {
-      messageContent = { text: original.extendedTextMessage.text || '' };
-    } else if (original.imageMessage) {
-      const buffer = await client.downloadMediaMessage(original.imageMessage);
-      messageContent = {
-        image: buffer,
-        caption: original.imageMessage.caption || ''
-      };
-    } else if (original.videoMessage) {
-      const buffer = await client.downloadMediaMessage(original.videoMessage);
-      messageContent = {
-        video: buffer,
-        caption: original.videoMessage.caption || ''
-      };
-    } else {
-      return await client.sendMessage(from, {
-        text: "⚠️ This type of edit is not yet supported."
-      }, { quoted: message });
-    }
-
-    await client.sendMessage(from, messageContent, options);
+    return await client.sendMessage(from, {
+      text: `⚙️ Anti-Edit is currently *${antiEditEnabled ? "ON" : "OFF"}*\n\nUse:\n.antiedit on\n.antiedit off`
+    }, { quoted: message });
 
   } catch (error) {
-    console.error("antiedit Error:", error);
+    console.error("antiedit command Error:", error);
     await client.sendMessage(from, {
-      text: "❌ Error fetching original message:\n" + error.message
+      text: "❌ Error:\n" + error.message
     }, { quoted: message });
   }
 });
