@@ -27,10 +27,12 @@ const {
     Browsers
 } = require(config.BAILEYS);
 
+const prefix = config.PREFIX;
 const l = console.log;
 const { getBuffer, getGroupAdmins, getRandom, h2k, isUrl, Json, runtime, sleep, fetchJson } = require('./lib/functions');
 
 // ==================== UTILITY FUNCTIONS ====================
+
 function parseCommand(body, prefix) {
     if (!body.startsWith(prefix)) return null;
     
@@ -41,7 +43,6 @@ function parseCommand(body, prefix) {
     
     return { command, args, full: cleanBody };
 }
-
 const { AntiDelDB, initializeAntiDeleteSettings, setAnti, getAnti, getAllAntiDeleteSettings, saveContact, loadMessage, getName, getChatSummary, saveGroupMetadata, getGroupMetadata, saveMessageCount, getInactiveGroupMembers, getGroupMembersMessageCount, saveMessage } = require('./data');
 const fs = require('fs');
 const ff = require('fluent-ffmpeg');
@@ -58,7 +59,7 @@ const bodyparser = require('body-parser');
 const os = require('os');
 const Crypto = require('crypto');
 const path = require('path');
-const prefix = config.PREFIX;
+
 const { Octokit } = require('@octokit/rest');
 const ownerNumber = ['263719647303'];
 const express = require("express");
@@ -691,23 +692,26 @@ const newsletterJids = [
             }
         }
         */
-        if (isCmd) {
-    console.log(`[CMD] Received command: ${command} from ${sender}`);
+if (isCmd) {
+    console.log(`[CMD] Received: ${command} from ${sender}`);
     
-    const cmd = events.commands.find((cmd) => cmd.pattern === (cmdName)) || 
-                events.commands.find((cmd) => cmd.alias && cmd.alias.includes(cmdName));
+    // Find the command
+    const cmd = events.commands.find(c => c.pattern === command) || 
+               events.commands.find(c => c.alias && c.alias.includes(command));
     
     if (cmd) {
-        console.log(`[CMD] Found command: ${cmd.pattern}`);
+        console.log(`[CMD] Executing: ${cmd.pattern}`);
         
+        // Send reaction if defined
         if (cmd.react) {
             try {
                 await conn.sendMessage(from, { react: { text: cmd.react, key: mek.key } });
-            } catch (reactError) {
-                console.error("[REACT ERROR]", reactError);
+            } catch (e) {
+                console.error("[REACT ERROR]", e);
             }
         }
 
+        // Execute the command
         try {
             await cmd.function(conn, mek, m, { 
                 from, quoted, body, isCmd, command, args, q, text, 
@@ -725,17 +729,16 @@ const newsletterJids = [
             }
         }
     } else {
-        console.log(`[CMD] Command not found: ${command}`);
+        console.log(`[CMD] Not found: ${command}`);
         try {
             await reply(`❌ Command *${command}* doesn't exist!\nUse *${prefix}help* to see available commands.`);
-        } catch (replyError) {
-            console.error("[REPLY ERROR]", replyError);
+        } catch (e) {
+            console.error("[REPLY ERROR]", e);
         }
     }
     
-    // Return after processing command to prevent other handlers from interfering
-    return;
-        }
+    return; // Stop processing after handling command
+}
 
         // Handle other event types
         events.commands.map(async(command) => {
