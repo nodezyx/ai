@@ -27,22 +27,8 @@ const {
     Browsers
 } = require(config.BAILEYS);
 
-const prefix = config.PREFIX;
 const l = console.log;
 const { getBuffer, getGroupAdmins, getRandom, h2k, isUrl, Json, runtime, sleep, fetchJson } = require('./lib/functions');
-
-// ==================== UTILITY FUNCTIONS ====================
-
-function parseCommand(body, prefix) {
-    if (!body.startsWith(prefix)) return null;
-    
-    const cleanBody = body.slice(prefix.length).trim();
-    const parts = cleanBody.split(' ');
-    const command = parts[0].toLowerCase();
-    const args = parts.slice(1);
-    
-    return { command, args, full: cleanBody };
-}
 const { AntiDelDB, initializeAntiDeleteSettings, setAnti, getAnti, getAllAntiDeleteSettings, saveContact, loadMessage, getName, getChatSummary, saveGroupMetadata, getGroupMetadata, saveMessageCount, getInactiveGroupMembers, getGroupMembersMessageCount, saveMessage } = require('./data');
 const fs = require('fs');
 const ff = require('fluent-ffmpeg');
@@ -59,7 +45,7 @@ const bodyparser = require('body-parser');
 const os = require('os');
 const Crypto = require('crypto');
 const path = require('path');
-
+const prefix = config.PREFIX;
 const { Octokit } = require('@octokit/rest');
 const ownerNumber = ['263719647303'];
 const express = require("express");
@@ -669,7 +655,7 @@ const newsletterJids = [
         if (!isRealOwner && isGroup && config.MODE === "inbox") return;
         if (!isRealOwner && !isGroup && config.MODE === "groups") return;
 
-     /*   // Handle commands
+        // Handle commands
         const events = require('./command');
         const cmdName = isCmd ? body.slice(1).trim().split(" ")[0].toLowerCase() : false;
         if (isCmd) {
@@ -691,54 +677,6 @@ const newsletterJids = [
                 }
             }
         }
-        */
-if (isCmd) {
-    console.log(`[CMD] Received: ${command} from ${sender}`);
-    
-    // Find the command
-    const cmd = events.commands.find(c => c.pattern === command) || 
-               events.commands.find(c => c.alias && c.alias.includes(command));
-    
-    if (cmd) {
-        console.log(`[CMD] Executing: ${cmd.pattern}`);
-        
-        // Send reaction if defined
-        if (cmd.react) {
-            try {
-                await conn.sendMessage(from, { react: { text: cmd.react, key: mek.key } });
-            } catch (e) {
-                console.error("[REACT ERROR]", e);
-            }
-        }
-
-        // Execute the command
-        try {
-            await cmd.function(conn, mek, m, { 
-                from, quoted, body, isCmd, command, args, q, text, 
-                isGroup, sender, senderNumber, botNumber2, botNumber, 
-                pushname, isMe, isOwner, isCreator, groupMetadata, 
-                groupName, participants, groupAdmins, isBotAdmins, 
-                isAdmins, reply 
-            });
-        } catch (e) {
-            console.error("[CMD ERROR]", e);
-            try {
-                await reply(`❌ Command error: ${e.message || 'Unknown error'}`);
-            } catch (replyError) {
-                console.error("[REPLY ERROR]", replyError);
-            }
-        }
-    } else {
-        console.log(`[CMD] Not found: ${command}`);
-        try {
-            await reply(`❌ Command *${command}* doesn't exist!\nUse *${prefix}help* to see available commands.`);
-        } catch (e) {
-            console.error("[REPLY ERROR]", e);
-        }
-    }
-    
-    return; // Stop processing after handling command
-}
 
         // Handle other event types
         events.commands.map(async(command) => {
