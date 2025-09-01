@@ -63,7 +63,9 @@ cmd({
       }, { quoted: message });
     }
 
-    if (match && match.trim().toLowerCase() === "on") {
+    const input = (match || "").toString().trim().toLowerCase();
+
+    if (input === "on") {
       antiEditEnabled = true;
       registerAntiEditListener(client);
       return await client.sendMessage(from, {
@@ -71,7 +73,7 @@ cmd({
       }, { quoted: message });
     }
 
-    if (match && match.trim().toLowerCase() === "off") {
+    if (input === "off") {
       antiEditEnabled = false;
       return await client.sendMessage(from, {
         text: "❌ Anti-Edit has been *DISABLED*."
