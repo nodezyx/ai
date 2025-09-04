@@ -140,13 +140,16 @@ cmd({
         // Fetch data from YTMAX API
         const ytData = await fetchYtMaxData(videoUrl);
 
+        // Debug: Log available qualities
+        console.log('Available video qualities:', ytData.videos ? Object.keys(ytData.videos) : 'None');
+
         // Fetch thumbnail
         const thumbnailBuffer = await fetchThumbnail(ytData.thumbnail || videoInfo?.thumbnail);
 
         // Generate unique session ID
         const sessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-        // Prepare caption - FIXED: Changed "Hector Manuel" to "Mr Frank"
+        // Prepare caption
         let caption = `🎬 *YTMAX DOWNLOADER* 🎬\n\n` +
                      `📌 *Title:* ${ytData.title || videoInfo?.title || 'Unknown'}\n` +
                      `👤 *Channel:* ${videoInfo?.author?.name || 'Unknown'}\n` +
@@ -170,11 +173,12 @@ cmd({
             }
         ];
 
-        // Add video quality buttons - FIXED: Added all qualities up to 1080p
-        const qualities = ['144', '240', '360', '480', '720', '1080'];
+        // Add video quality buttons - FIXED: Properly check for all available qualities
+        const qualityOrder = ['1080', '720', '480', '360', '240', '144']; // Highest quality first
         
-        qualities.forEach(quality => {
-            if (ytData.videos && ytData.videos[quality]) {
+        qualityOrder.forEach(quality => {
+            // Check if the quality exists in the videos object
+            if (ytData.videos && ytData.videos[quality] && ytData.videos[quality] !== '') {
                 buttons.push({
                     buttonId: `ytmax-video-${quality}-${sessionId}`,
                     buttonText: { displayText: `🎥 ${quality}p` },
@@ -183,9 +187,20 @@ cmd({
             }
         });
 
-        // Ensure we don't exceed button limits
-        const maxButtons = 5; // WhatsApp limit
-        const finalButtons = buttons.slice(0, maxButtons);
+        // Debug: Log buttons being created
+        console.log('Creating buttons for qualities:', buttons.map(b => b.buttonText.displayText));
+
+        // Ensure we don't exceed button limits but prioritize higher qualities
+        const maxButtons = 6; // Increased limit to show more options
+        let finalButtons = buttons;
+        
+        if (buttons.length > maxButtons) {
+            // Keep audio button and highest quality video buttons
+            finalButtons = [
+                buttons[0], // Audio button
+                ...buttons.slice(1, maxButtons) // Highest quality video buttons
+            ];
+        }
 
         // Create buttons message
         const buttonsMessage = {
@@ -210,6 +225,15 @@ cmd({
         const finalMsg = await conn.sendMessage(mek.chat, buttonsMessage, { quoted: mek });
         const messageId = finalMsg.key.id;
 
+        // Store API data for later use
+        const apiData = {
+            ytData,
+            videoInfo,
+            videoUrl,
+            isUrl,
+            searchQuery
+        };
+
         // Button handler
         const buttonHandler = async (msgData) => {
             try {
@@ -231,8 +255,8 @@ cmd({
 
                         if (buttonId.startsWith(`ytmax-audio-${sessionId}`)) {
                             // Audio download
-                            mediaUrl = ytData.audio;
-                            fileName = `${(ytData.title || 'audio').replace(/[<>:"\/\\|?*]+/g, '')}.mp3`;
+                            mediaUrl = apiData.ytData.audio;
+                            fileName = `${(apiData.ytData.title || 'audio').replace(/[<>:"\/\\|?*]+/g, '')}.mp3`;
                             mediaType = 'audio';
                             qualityText = 'Audio MP3';
                         } else if (buttonId.startsWith(`ytmax-video-`)) {
@@ -240,8 +264,8 @@ cmd({
                             const qualityMatch = buttonId.match(/ytmax-video-(\d+)-/);
                             if (qualityMatch && qualityMatch[1]) {
                                 const quality = qualityMatch[1];
-                                mediaUrl = ytData.videos[quality];
-                                fileName = `${(ytData.title || 'video').replace(/[<>:"\/\\|?*]+/g, '')}_${quality}p.mp4`;
+                                mediaUrl = apiData.ytData.videos[quality];
+                                fileName = `${(apiData.ytData.title || 'video').replace(/[<>:"\/\\|?*]+/g, '')}_${quality}p.mp4`;
                                 mediaType = 'video';
                                 qualityText = `${quality}p Video`;
                             }
@@ -257,13 +281,13 @@ cmd({
                         const mediaBuffer = await downloadMedia(mediaUrl);
 
                         // Prepare final caption
-                        let finalCaption = `🎬 *${ytData.title || 'Media'}*\n\n` +
+                        let finalCaption = `🎬 *${apiData.ytData.title || 'Media'}*\n\n` +
                                          `📊 *Quality:* ${qualityText}\n` +
-                                         `⏱️ *Duration:* ${videoInfo?.timestamp || 'N/A'}\n` +
-                                         `👀 *Views:* ${videoInfo?.views?.toLocaleString() || 'N/A'}\n`;
+                                         `⏱️ *Duration:* ${apiData.videoInfo?.timestamp || 'N/A'}\n` +
+                                         `👀 *Views:* ${apiData.videoInfo?.views?.toLocaleString() || 'N/A'}\n`;
                         
-                        if (!isUrl) {
-                            finalCaption += `🔍 *Searched:* "${searchQuery}"\n\n`;
+                        if (!apiData.isUrl) {
+                            finalCaption += `🔍 *Searched:* "${apiData.searchQuery}"\n\n`;
                         }
                         
                         finalCaption += `> Downloaded via YTMAX • ${Config.BOTNAME || 'Bot'}`;
