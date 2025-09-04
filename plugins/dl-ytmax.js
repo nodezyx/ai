@@ -440,7 +440,7 @@ cmd({
                         finalCaption += `🔍 *Searched:* "${searchQuery}"\n\n`;
                     }
                     
-                    finalCaption += `> © 𝘾𝙧𝙚𝙖𝙩𝙚𝙙  𝘽𝙮 𝙈𝙧 𝙁𝙧𝙖𝙣𝙠 𝙊𝙁𝘾 ッ• ${Config.BOTNAME || 'Bot'}`;
+                    finalCaption += `> © 𝘾𝙧𝙚𝙖𝙩𝙚𝙙  𝘽𝙮 𝙈𝙧 𝙁𝙧𝙖𝙣𝙠 𝙊𝙁𝘾 ッ`;
 
                     // Send media
                     if (mediaType === 'audio') {
