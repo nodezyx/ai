@@ -88,8 +88,10 @@ cmd(
             // Fetch audio data
             const songData = await fetchAudioData(videoUrl);
 
-            // Check if button interface should be used
-            if (Config.BUTTON === true) {
+            // Check if button interface should be used - FIXED CONDITION
+            const useButtons = Config.BUTTON === true || Config.BUTTON === "true";
+
+            if (useButtons) {
                 // Use button-based interface
                 
                 // Fetch thumbnail
@@ -117,12 +119,12 @@ cmd(
                     footer: Config.FOOTER || '> Powered by Kaiz API',
                     buttons: [
                         {
-                            buttonId: `song-audio-${sessionId}-${videoUrl}`,
+                            buttonId: `song-audio-${sessionId}-${encodeURIComponent(videoUrl)}`,
                             buttonText: { displayText: '🎵 Audio (Play)' },
                             type: 1
                         },
                         {
-                            buttonId: `song-document-${sessionId}-${videoUrl}`,
+                            buttonId: `song-document-${sessionId}-${encodeURIComponent(videoUrl)}`,
                             buttonText: { displayText: '📁 Document (Save)' },
                             type: 1
                         }
@@ -160,7 +162,12 @@ cmd(
 
                         try {
                             const type = buttonId.startsWith(`song-audio-${sessionId}`) ? 'audio' : 'document';
-                            const freshSongData = await fetchAudioData(videoUrl); // Fresh API call
+                            
+                            // Extract video URL from button ID
+                            const urlMatch = buttonId.match(/song-(audio|document)-[^-]+-(.+)/);
+                            const targetVideoUrl = urlMatch ? decodeURIComponent(urlMatch[2]) : videoUrl;
+                            
+                            const freshSongData = await fetchAudioData(targetVideoUrl); // Fresh API call
 
                             // Download audio
                             const audioResponse = await axiosInstance.get(freshSongData.download_url, {
@@ -314,6 +321,11 @@ cmd(
                 };
 
                 conn.ev.on('messages.upsert', messageListener);
+
+                // Remove listener after 2 minutes
+                setTimeout(() => {
+                    conn.ev.off('messages.upsert', messageListener);
+                }, 120000);
             }
 
         } catch (error) {
@@ -323,5 +335,3 @@ cmd(
         }
     }
 );
-
-
