@@ -118,7 +118,7 @@ cmd({
     try {
         if (!text) {
             await conn.sendMessage(mek.chat, { react: { text: '⚠️', key: mek.key } });
-            return reply('🎬 *YTMAX Downloader*\n\n' +
+            return reply('🎬 \`YouTube Pro Downloader\`\n\n' +
                         '📥 Download YouTube videos/audio in multiple qualities\n\n' +
                         '*Usage:* .ytmax <query/url>\n' +
                         'Examples:\n' +
@@ -150,7 +150,7 @@ cmd({
         const sessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
         // Prepare caption
-        let caption = `🎬 *YTMAX DOWNLOADER* 🎬\n\n` +
+        let caption = `🎬 \`YouTube Pro Downloader\`🎬\n\n` +
                      `📌 *Title:* ${ytData.title || videoInfo?.title || 'Unknown'}\n` +
                      `👤 *Channel:* ${videoInfo?.author?.name || 'Unknown'}\n` +
                      `⏱️ *Duration:* ${videoInfo?.timestamp || 'Unknown'}\n` +
@@ -162,7 +162,7 @@ cmd({
         
         caption += `\n📊 *Available Qualities:*\n` +
                   `🎵 Audio • 🎥 144p-1080p\n\n` +
-                  `> Powered by Mr Frank`;
+                  `> © 𝘾𝙧𝙚𝙖𝙩𝙚𝙙  𝘽𝙮 𝙈𝙧 𝙁𝙧𝙖𝙣𝙠 𝙊𝙁𝘾 ッ`;
 
         // Create buttons for all available options
         let buttons = [
@@ -211,7 +211,7 @@ cmd({
             headerType: 1,
             contextInfo: {
                 externalAdReply: {
-                    title: ytData.title || 'YTMAX Downloader',
+                    title: ytData.title || 'Subzero YT Downloader',
                     body: `Duration: ${videoInfo?.timestamp || 'N/A'} • Views: ${videoInfo?.views?.toLocaleString() || 'N/A'}`,
                     thumbnail: thumbnailBuffer,
                     mediaType: 1,
@@ -276,7 +276,7 @@ cmd({
                         }
 
                         // Download media
-                        await reply(`⬇️ *Downloading ${qualityText}...*\nPlease wait, this may take a while...`);
+                        await reply(`🔄 _Downloading ${qualityText}_ `);
                         
                         const mediaBuffer = await downloadMedia(mediaUrl);
 
@@ -290,7 +290,7 @@ cmd({
                             finalCaption += `🔍 *Searched:* "${apiData.searchQuery}"\n\n`;
                         }
                         
-                        finalCaption += `> Downloaded via YTMAX • ${Config.BOTNAME || 'Bot'}`;
+                        finalCaption += `> © 𝘾𝙧𝙚𝙖𝙩𝙚𝙙  𝘽𝙮 𝙈𝙧 𝙁𝙧𝙖𝙣𝙠 𝙊𝙁𝘾 ッ• ${Config.BOTNAME || 'Bot'}`;
 
                         // Send media
                         if (mediaType === 'audio') {
