@@ -131,7 +131,11 @@ cmd({
         await conn.sendMessage(mek.chat, { react: { text: '⏳', key: mek.key } });
 
         // Fetch video info
-        const { url: videoUrl, info: videoInfo, isUrl, searchQuery } = await fetchVideoInfo(text);
+        const videoData = await fetchVideoInfo(text);
+        const videoUrl = videoData.url;
+        const videoInfo = videoData.info;
+        const isUrl = videoData.isUrl;
+        const searchQuery = videoData.searchQuery;
 
         // Fetch data from YTMAX API
         const ytData = await fetchYtMaxData(videoUrl);
@@ -142,7 +146,7 @@ cmd({
         // Generate unique session ID
         const sessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-        // Prepare caption
+        // Prepare caption - FIXED: Changed "Hector Manuel" to "Mr Frank"
         let caption = `🎬 *YTMAX DOWNLOADER* 🎬\n\n` +
                      `📌 *Title:* ${ytData.title || videoInfo?.title || 'Unknown'}\n` +
                      `👤 *Channel:* ${videoInfo?.author?.name || 'Unknown'}\n` +
@@ -155,10 +159,10 @@ cmd({
         
         caption += `\n📊 *Available Qualities:*\n` +
                   `🎵 Audio • 🎥 144p-1080p\n\n` +
-                  `> Powered by Hector Manuel API`;
+                  `> Powered by Mr Frank`;
 
         // Create buttons for all available options
-        const buttons = [
+        let buttons = [
             {
                 buttonId: `ytmax-audio-${sessionId}`,
                 buttonText: { displayText: '🎵 Audio MP3' },
@@ -166,10 +170,11 @@ cmd({
             }
         ];
 
-        // Add video quality buttons
+        // Add video quality buttons - FIXED: Added all qualities up to 1080p
         const qualities = ['144', '240', '360', '480', '720', '1080'];
+        
         qualities.forEach(quality => {
-            if (ytData.videos?.[quality]) {
+            if (ytData.videos && ytData.videos[quality]) {
                 buttons.push({
                     buttonId: `ytmax-video-${quality}-${sessionId}`,
                     buttonText: { displayText: `🎥 ${quality}p` },
@@ -205,16 +210,6 @@ cmd({
         const finalMsg = await conn.sendMessage(mek.chat, buttonsMessage, { quoted: mek });
         const messageId = finalMsg.key.id;
 
-        // Store session data
-        const sessionData = {
-            videoUrl,
-            ytData,
-            videoInfo,
-            isUrl,
-            searchQuery,
-            timestamp: Date.now()
-        };
-
         // Button handler
         const buttonHandler = async (msgData) => {
             try {
@@ -243,7 +238,7 @@ cmd({
                         } else if (buttonId.startsWith(`ytmax-video-`)) {
                             // Video download - extract quality
                             const qualityMatch = buttonId.match(/ytmax-video-(\d+)-/);
-                            if (qualityMatch) {
+                            if (qualityMatch && qualityMatch[1]) {
                                 const quality = qualityMatch[1];
                                 mediaUrl = ytData.videos[quality];
                                 fileName = `${(ytData.title || 'video').replace(/[<>:"\/\\|?*]+/g, '')}_${quality}p.mp4`;
@@ -262,10 +257,10 @@ cmd({
                         const mediaBuffer = await downloadMedia(mediaUrl);
 
                         // Prepare final caption
-                        const finalCaption = `🎬 *${ytData.title || 'Media'}*\n\n` +
-                                           `📊 *Quality:* ${qualityText}\n` +
-                                           `⏱️ *Duration:* ${videoInfo?.timestamp || 'N/A'}\n` +
-                                           `👀 *Views:* ${videoInfo?.views?.toLocaleString() || 'N/A'}\n`;
+                        let finalCaption = `🎬 *${ytData.title || 'Media'}*\n\n` +
+                                         `📊 *Quality:* ${qualityText}\n` +
+                                         `⏱️ *Duration:* ${videoInfo?.timestamp || 'N/A'}\n` +
+                                         `👀 *Views:* ${videoInfo?.views?.toLocaleString() || 'N/A'}\n`;
                         
                         if (!isUrl) {
                             finalCaption += `🔍 *Searched:* "${searchQuery}"\n\n`;
