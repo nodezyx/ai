@@ -254,12 +254,13 @@ cmd(
                         let selection = null;
                         let isReaction = false;
                         
-                        // Check for reactions
+                        // Check for reactions (FIXED THIS PART)
                         if (mekInfo.message.reactionMessage) {
                             const reaction = mekInfo.message.reactionMessage.text;
-                            const isReactionToSentMsg = mekInfo.message.reactionMessage.key.id === optionsMessageId;
+                            // Check if reaction is to our message by comparing key ID
+                            const reactedMessageId = mekInfo.message.reactionMessage.key?.id;
                             
-                            if (isReactionToSentMsg) {
+                            if (reactedMessageId === optionsMessageId) {
                                 if (reaction === '1️⃣') selection = '1';
                                 if (reaction === '2️⃣') selection = '2';
                                 isReaction = true;
