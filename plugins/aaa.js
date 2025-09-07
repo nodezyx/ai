@@ -198,7 +198,7 @@ cmd(
                 }, 60000);
 
             } else {
-                // Use text-based interface with both number reactions AND text replies
+                // Use text-based interface with both reactions and text replies
                 
                 // Fetch thumbnail in parallel with audio download
                 const [thumbnailResponse] = await Promise.all([
@@ -239,6 +239,9 @@ cmd(
                     }
                 }, { quoted: mek });
 
+                // Store message ID for reply detection
+                const optionsMessageId = sentMsg.key.id;
+
                 // Set up response listener for both reactions and text replies
                 const messageListener = async (messageUpdate) => {
                     try {
@@ -254,7 +257,7 @@ cmd(
                         // Check for reactions
                         if (mekInfo.message.reactionMessage) {
                             const reaction = mekInfo.message.reactionMessage.text;
-                            const isReactionToSentMsg = mekInfo.message.reactionMessage.key.id === sentMsg.key.id;
+                            const isReactionToSentMsg = mekInfo.message.reactionMessage.key.id === optionsMessageId;
                             
                             if (isReactionToSentMsg) {
                                 if (reaction === '1️⃣') selection = '1';
@@ -266,11 +269,16 @@ cmd(
                         // Check for text replies if no valid reaction found
                         if (!selection) {
                             const message = mekInfo.message;
-                            const messageType = message.conversation || message.extendedTextMessage?.text;
-                            const isReplyToSentMsg = message.extendedTextMessage?.contextInfo?.stanzaId === sentMsg.key.id;
+                            const messageText = message.conversation || message.extendedTextMessage?.text || '';
                             
-                            if (isReplyToSentMsg && ['1', '2'].includes(messageType?.trim())) {
-                                selection = messageType.trim();
+                            // Check if it's a reply to our options message
+                            const isReply = message.extendedTextMessage?.contextInfo?.stanzaId === optionsMessageId;
+                            
+                            // Check if it's a direct message with just 1 or 2 (not a reply)
+                            const isDirectNumber = ['1', '2'].includes(messageText.trim()) && !message.extendedTextMessage?.contextInfo;
+                            
+                            if ((isReply || isDirectNumber) && ['1', '2'].includes(messageText.trim())) {
+                                selection = messageText.trim();
                             }
                         }
 
