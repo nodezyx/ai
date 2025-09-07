@@ -22,7 +22,7 @@ module.exports = {
     MODE: getConfig("MODE") || process.env.MODE || "public",
     REPO: process.env.REPO || "https://github.com/mrfrankofcc/SUBZERO-MD",
     BAILEYS: process.env.BAILEYS || "@whiskeysockets/baileys",
-    TOKEN: process.env.TOKEN || "cBxbNViY7tfamYP8W0uyU3Hv7wbxXy3Cikpw",
+    TOKEN: process.env.TOKEN || "xJ6QYrPDaRnMG2y5mcvT8tatbsABMg15Gxp1",
     BUTTON: getConfig("BUTTON") || false,
 
     // ===== OWNER & DEVELOPER INFO =====
