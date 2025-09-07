@@ -62,8 +62,8 @@ function setupButtonHandler(conn, from, sessionId, messageId, handler) {
 
 // Button toggle command
 cmd({
-    pattern: "buttons",
-    alias: ["togglebuttons", "buttonmode"],
+    pattern: "buttons2",
+    alias: ["togglebuttons2", "buttonmode2"],
     react: "🪀",
     desc: "Enable or disable interactive buttons in the bot",
     category: "settings",
