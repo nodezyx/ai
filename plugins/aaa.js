@@ -252,17 +252,17 @@ cmd(
                         if (!isFromSameChat) return;
 
                         let selection = null;
-                        let isReaction = false;
                         
-                        // Check for reactions
+                        // Check for reactions (FIXED - proper reaction detection)
                         if (mekInfo.message.reactionMessage) {
                             const reaction = mekInfo.message.reactionMessage.text;
-                            const isReactionToSentMsg = mekInfo.message.reactionMessage.key.id === optionsMessageId;
+                            // Get the ID of the message that was reacted to
+                            const reactedMessageId = mekInfo.message.reactionMessage.key?.id;
                             
-                            if (isReactionToSentMsg) {
+                            // Check if the reaction is for our message
+                            if (reactedMessageId === optionsMessageId) {
                                 if (reaction === '1️⃣') selection = '1';
                                 if (reaction === '2️⃣') selection = '2';
-                                isReaction = true;
                             }
                         }
                         
