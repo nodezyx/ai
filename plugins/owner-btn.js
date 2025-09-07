@@ -2,6 +2,9 @@ const { cmd } = require('../command');
 const config = require('../config');
 const { setConfig, getConfig } = require("../lib/configdb");
 
+// Store active button sessions to prevent memory leaks
+const activeButtonSessions = new Map();
+
 cmd({
     pattern: "buttons",
     alias: ["button", "buttonmode"],
@@ -17,10 +20,8 @@ cmd({
     
     const option = args[0]?.toLowerCase();
     
-    // Check if button interface should be used
-    const useButtons = isEnabled && !option;
-    
-    if (useButtons) {
+    // Show button interface ONLY if buttons are enabled AND no option is provided
+    if (isEnabled && !option) {
         // Button-based interface
         try {
             const sessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -30,17 +31,17 @@ cmd({
                 footer: config.FOOTER || 'Toggle button functionality',
                 buttons: [
                     {
-                        buttonId: `buttons-enable-${sessionId}`,
+                        buttonId: `enable-${sessionId}`,
                         buttonText: { displayText: '✅ ENABLE' },
                         type: 1
                     },
                     {
-                        buttonId: `buttons-disable-${sessionId}`,
+                        buttonId: `disable-${sessionId}`,
                         buttonText: { displayText: '❌ DISABLE' },
                         type: 1
                     },
                     {
-                        buttonId: `buttons-status-${sessionId}`,
+                        buttonId: `status-${sessionId}`,
                         buttonText: { displayText: '📊 STATUS' },
                         type: 1
                     }
@@ -52,58 +53,74 @@ cmd({
             const finalMsg = await conn.sendMessage(from, buttonsMessage, { quoted: mek });
             const messageId = finalMsg.key.id;
 
-            // Button handler
+            // Create button handler
             const buttonHandler = async (msgData) => {
-                const receivedMsg = msgData.messages[0];
-                if (!receivedMsg.message?.buttonsResponseMessage) return;
+                try {
+                    const receivedMsg = msgData.messages[0];
+                    if (!receivedMsg?.message?.buttonsResponseMessage) return;
 
-                const buttonId = receivedMsg.message.buttonsResponseMessage.selectedButtonId;
-                const senderId = receivedMsg.key.remoteJid;
-                const isReplyToBot = receivedMsg.message.buttonsResponseMessage.contextInfo?.stanzaId === messageId;
+                    const buttonId = receivedMsg.message.buttonsResponseMessage.selectedButtonId;
+                    const senderId = receivedMsg.key.remoteJid;
+                    const isReplyToBot = receivedMsg.message.buttonsResponseMessage.contextInfo?.stanzaId === messageId;
 
-                if (isReplyToBot && senderId === from && buttonId.includes(sessionId)) {
-                    conn.ev.off('messages.upsert', buttonHandler); // Remove listener
+                    // Validate the response
+                    if (!isReplyToBot || senderId !== from || !buttonId.includes(sessionId)) {
+                        return;
+                    }
+
+                    // Remove listener immediately to prevent multiple triggers
+                    conn.ev.off('messages.upsert', buttonHandler);
+                    activeButtonSessions.delete(sessionId);
 
                     await conn.sendMessage(from, { react: { text: '⏳', key: receivedMsg.key } });
 
-                    try {
-                        if (buttonId.startsWith(`buttons-enable-${sessionId}`)) {
-                            setConfig("BUTTON", "true");
-                            config.BUTTON = "true";
-                            await conn.sendMessage(from, { 
-                                text: "✅ *Interactive buttons are now ENABLED*\n\nThe bot will now use button interfaces where available." 
-                            }, { quoted: receivedMsg });
-                        } 
-                        else if (buttonId.startsWith(`buttons-disable-${sessionId}`)) {
-                            setConfig("BUTTON", "false");
-                            config.BUTTON = "false";
-                            await conn.sendMessage(from, { 
-                                text: "❌ *Interactive buttons are now DISABLED*\n\nThe bot will use text-based interfaces instead." 
-                            }, { quoted: receivedMsg });
-                        }
-                        else if (buttonId.startsWith(`buttons-status-${sessionId}`)) {
-                            const newStatus = getConfig("BUTTON") || config.BUTTON || "false";
-                            const newEnabled = newStatus === "true" || newStatus === true;
-                            await conn.sendMessage(from, { 
-                                text: `🔘 *Current Button Status:* ${newEnabled ? '✅ ENABLED' : '❌ DISABLED'}` 
-                            }, { quoted: receivedMsg });
-                        }
+                    let responseText = "";
+                    
+                    if (buttonId.startsWith(`enable-${sessionId}`)) {
+                        setConfig("BUTTON", "true");
+                        config.BUTTON = "true";
+                        responseText = "✅ *Interactive buttons are now ENABLED*\n\nThe bot will now use button interfaces where available.";
+                    } 
+                    else if (buttonId.startsWith(`disable-${sessionId}`)) {
+                        setConfig("BUTTON", "false");
+                        config.BUTTON = "false";
+                        responseText = "❌ *Interactive buttons are now DISABLED*\n\nThe bot will use text-based interfaces instead.";
+                    }
+                    else if (buttonId.startsWith(`status-${sessionId}`)) {
+                        const newStatus = getConfig("BUTTON") || config.BUTTON || "false";
+                        const newEnabled = newStatus === "true" || newStatus === true;
+                        responseText = `🔘 *Current Button Status:* ${newEnabled ? '✅ ENABLED' : '❌ DISABLED'}`;
+                    }
 
-                        await conn.sendMessage(from, { react: { text: '✅', key: receivedMsg.key } });
-                    } catch (error) {
-                        console.error('Button action error:', error);
+                    // Send response and confirmation
+                    await conn.sendMessage(from, { text: responseText }, { quoted: receivedMsg });
+                    await conn.sendMessage(from, { react: { text: '✅', key: receivedMsg.key } });
+
+                } catch (error) {
+                    console.error('Button action error:', error);
+                    try {
                         await conn.sendMessage(from, { react: { text: '❌', key: receivedMsg.key } });
-                        conn.sendMessage(from, { text: `❌ Error: ${error.message || 'Action failed'}` });
+                        await conn.sendMessage(from, { text: `❌ Error: ${error.message || 'Action failed'}` });
+                    } catch (e) {
+                        console.error('Failed to send error message:', e);
                     }
                 }
             };
 
-            // Add listener
+            // Store session and add listener
+            activeButtonSessions.set(sessionId, {
+                handler: buttonHandler,
+                timestamp: Date.now()
+            });
+            
             conn.ev.on('messages.upsert', buttonHandler);
 
-            // Remove listener after 2 minutes
+            // Auto-cleanup after 2 minutes
             setTimeout(() => {
-                conn.ev.off('messages.upsert', buttonHandler);
+                if (activeButtonSessions.has(sessionId)) {
+                    conn.ev.off('messages.upsert', buttonHandler);
+                    activeButtonSessions.delete(sessionId);
+                }
             }, 120000);
 
         } catch (error) {
@@ -112,7 +129,7 @@ cmd({
             await showTextInterface();
         }
     } else {
-        // Text-based interface
+        // Text-based interface (when buttons are disabled OR an option is provided)
         await showTextInterface();
     }
 
@@ -139,3 +156,13 @@ cmd({
         }
     }
 });
+
+// Cleanup old sessions periodically to prevent memory leaks
+setInterval(() => {
+    const now = Date.now();
+    for (const [sessionId, session] of activeButtonSessions.entries()) {
+        if (now - session.timestamp > 120000) { // 2 minutes
+            activeButtonSessions.delete(sessionId);
+        }
+    }
+}, 60000); // Cleanup every minute
