@@ -198,7 +198,7 @@ cmd(
                 }, 60000);
 
             } else {
-                // Use text-based interface with number reactions
+                // Use text-based interface with both reactions and text replies
                 
                 // Fetch thumbnail in parallel with audio download
                 const [thumbnailResponse] = await Promise.all([
@@ -218,10 +218,10 @@ cmd(
                                 `👤 ${videoInfo?.author?.name || 'Unknown Artist'}\n` +
                                 `👀 ${(videoInfo?.views || 'N/A').toLocaleString()} views\n\n` +
                                 `🔗 ${videoUrl}\n\n` +
-                                `*React with:*\n` +
+                                `*Choose format:*\n` +
                                 `1️⃣ - For Audio Format 🎵\n` +
                                 `2️⃣ - For Document Format 📁\n\n` +
-                                `> ${Config.FOOTER || 'Powered by Kaiz API'}`;
+                                `*React with 1️⃣/2️⃣ OR reply with 1/2*`;
 
                 // Send song info with thumbnail
                 const sentMsg = await conn.sendMessage(mek.chat, {
@@ -239,22 +239,56 @@ cmd(
                     }
                 }, { quoted: mek });
 
-                // Set up reaction listener
-                const reactionListener = async (messageUpdate) => {
+                // Store message ID for reply detection
+                const optionsMessageId = sentMsg.key.id;
+
+                // Set up response listener for both reactions and text replies
+                const messageListener = async (messageUpdate) => {
                     try {
                         const mekInfo = messageUpdate?.messages[0];
-                        if (!mekInfo?.message?.reactionMessage) return;
+                        if (!mekInfo?.message) return;
 
-                        const reaction = mekInfo.message.reactionMessage.text;
-                        const isReactionToSentMsg = mekInfo.message.reactionMessage.key.id === sentMsg.key.id;
                         const isFromSameChat = mekInfo.key.remoteJid === mek.chat;
+                        if (!isFromSameChat) return;
 
-                        if (!isReactionToSentMsg || !isFromSameChat || !['1️⃣', '2️⃣'].includes(reaction)) return;
+                        let selection = null;
+                        let isReaction = false;
+                        
+                        // Check for reactions
+                        if (mekInfo.message.reactionMessage) {
+                            const reaction = mekInfo.message.reactionMessage.text;
+                            const isReactionToSentMsg = mekInfo.message.reactionMessage.key.id === optionsMessageId;
+                            
+                            if (isReactionToSentMsg) {
+                                if (reaction === '1️⃣') selection = '1';
+                                if (reaction === '2️⃣') selection = '2';
+                                isReaction = true;
+                            }
+                        }
+                        
+                        // Check for text replies if no valid reaction found
+                        if (!selection) {
+                            const message = mekInfo.message;
+                            const messageText = message.conversation || message.extendedTextMessage?.text || '';
+                            
+                            // Check if it's a reply to our options message
+                            const isReply = message.extendedTextMessage?.contextInfo?.stanzaId === optionsMessageId;
+                            
+                            // Check if it's a direct message with just 1 or 2 (not a reply)
+                            const isDirectNumber = ['1', '2'].includes(messageText.trim()) && !message.extendedTextMessage?.contextInfo;
+                            
+                            if ((isReply || isDirectNumber) && ['1', '2'].includes(messageText.trim())) {
+                                selection = messageText.trim();
+                            }
+                        }
+
+                        // If no valid selection found, skip processing
+                        if (!selection) return;
 
                         // Immediately remove listener
-                        conn.ev.off('messages.upsert', reactionListener);
+                        conn.ev.off('messages.upsert', messageListener);
 
-                        // Start download
+                        // Start download without waiting for confirmation message
                         const audioPromise = axiosInstance.get(songData.download_url, {
                             responseType: 'arraybuffer',
                             headers: { 
@@ -272,8 +306,8 @@ cmd(
 
                         const fileName = `${(songData.title || videoInfo?.title || 'audio').replace(/[<>:"\/\\|?*]+/g, '')}.mp3`;
 
-                        // Send audio based on user reaction
-                        if (reaction === "1️⃣") {
+                        // Send audio based on user choice
+                        if (selection === "1") {
                             await conn.sendMessage(mek.chat, {
                                 audio: audioBuffer,
                                 mimetype: 'audio/mpeg',
@@ -312,11 +346,11 @@ cmd(
                     }
                 };
 
-                conn.ev.on('messages.upsert', reactionListener);
+                conn.ev.on('messages.upsert', messageListener);
 
                 // Remove listener after 2 minutes
                 setTimeout(() => {
-                    conn.ev.off('messages.upsert', reactionListener);
+                    conn.ev.off('messages.upsert', messageListener);
                 }, 120000);
             }
 
