@@ -99,10 +99,28 @@ async function fetchThumbnail(thumbnailUrl) {
 
 // Utility function to send audio
 async function sendAudio(conn, chat, audioBuffer, fileName, type, caption, quoted) {
-    const message = type === 'audio'
-        ? { audio: audioBuffer, mimetype: 'audio/mpeg', fileName, ptt: false }
-        : { document: audioBuffer, mimetype: 'audio/mpeg', fileName };
-    await conn.sendMessage(chat, { ...message, caption }, { quoted });
+    if (type === 'audio') {
+        await conn.sendMessage(chat, { 
+            audio: audioBuffer, 
+            mimetype: 'audio/mpeg', 
+            fileName: fileName, 
+            ptt: false 
+        }, { quoted });
+    } else if (type === 'document') {
+        await conn.sendMessage(chat, { 
+            document: audioBuffer, 
+            mimetype: 'audio/mpeg', 
+            fileName: fileName,
+            caption: caption
+        }, { quoted });
+    } else if (type === 'voice') {
+        await conn.sendMessage(chat, { 
+            audio: audioBuffer, 
+            mimetype: 'audio/mpeg', 
+            ptt: true,
+            waveform: [0, 99, 0, 99, 0, 99, 0] // Fake waveform for voice message
+        }, { quoted });
+    }
 }
 
 cmd(
@@ -154,16 +172,16 @@ cmd(
 ├─ 🕒 Published: ${videoInfo?.ago || 'Unknown'}
 ╰─ 🔗 URL: ${videoUrl || 'Unknown'}
 
-> Powered By Mr Frank `;
+${Config.FOOTER || '> Powered by YTMAX API'}`;
 
                 // Generate unique session ID
                 const sessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-                // Create buttons message
+                // Create buttons message with 3 options
                 const buttonsMessage = {
                     image: thumbnailBuffer,
                     caption,
-                    footer: Config.FOOTER || '> Powered by YTMAX API',
+                    footer: 'Select format • React with 1️⃣/2️⃣/3️⃣',
                     buttons: [
                         {
                             buttonId: `song-audio-${sessionId}-${encodeURIComponent(videoUrl)}`,
@@ -173,6 +191,11 @@ cmd(
                         {
                             buttonId: `song-document-${sessionId}-${encodeURIComponent(videoUrl)}`,
                             buttonText: { displayText: '📁 Document (Save)' },
+                            type: 1
+                        },
+                        {
+                            buttonId: `song-voice-${sessionId}-${encodeURIComponent(videoUrl)}`,
+                            buttonText: { displayText: '🎤 Voice Message' },
                             type: 1
                         }
                     ],
@@ -190,8 +213,85 @@ cmd(
                 };
 
                 // Send message with buttons
-                const finalMsg = await conn.sendMessage(mek.chat, buttonsMessage, { quoted: mek });
-                const messageId = finalMsg.key.id;
+                const sentMsg = await conn.sendMessage(mek.chat, buttonsMessage, { quoted: mek });
+                const messageId = sentMsg.key.id;
+
+                // Store API data for later use
+                const apiData = {
+                    ytData,
+                    videoInfo,
+                    videoUrl,
+                    isUrl,
+                    searchQuery
+                };
+
+                // Set up reaction listener
+                const reactionListener = async (messageUpdate) => {
+                    try {
+                        const mekInfo = messageUpdate?.messages[0];
+                        if (!mekInfo?.message?.reactionMessage) return;
+
+                        const reaction = mekInfo.message.reactionMessage.text;
+                        const isReactionToSentMsg = mekInfo.message.reactionMessage.key.id === messageId;
+                        const isFromSameChat = mekInfo.key.remoteJid === mek.chat;
+
+                        if (!isReactionToSentMsg || !isFromSameChat || !['1️⃣', '2️⃣', '3️⃣'].includes(reaction)) return;
+
+                        // Immediately remove listener
+                        conn.ev.off('messages.upsert', reactionListener);
+
+                        await conn.sendMessage(mek.chat, { react: { text: '⏳', key: mekInfo.key } });
+
+                        try {
+                            let type, qualityText;
+                            
+                            if (reaction === '1️⃣') {
+                                type = 'audio';
+                                qualityText = 'Audio MP3';
+                            } else if (reaction === '2️⃣') {
+                                type = 'document';
+                                qualityText = 'Document MP3';
+                            } else if (reaction === '3️⃣') {
+                                type = 'voice';
+                                qualityText = 'Voice Message';
+                            }
+
+                            // Download audio using YTMAX API
+                            const audioResponse = await axiosInstance.get(apiData.ytData.audio, {
+                                responseType: 'arraybuffer',
+                                headers: { 
+                                    Referer: 'https://www.youtube.com/',
+                                    'Accept-Encoding': 'identity'
+                                },
+                                timeout: 30000
+                            });
+
+                            const audioBuffer = Buffer.from(audioResponse.data, 'binary');
+                            const fileName = `${(apiData.ytData.title || apiData.videoInfo?.title || 'audio').replace(/[<>:"\/\\|?*]+/g, '')}.mp3`;
+
+                            // Prepare final caption
+                            const finalCaption = `🎵 *${apiData.ytData.title || apiData.videoInfo?.title || 'Audio'}*\n` +
+                                                `⏱ ${apiData.videoInfo?.timestamp || 'N/A'}\n` +
+                                                `👤 ${apiData.videoInfo?.author?.name || 'Unknown Artist'}\n` +
+                                                `👀 ${(apiData.videoInfo?.views || 'N/A').toLocaleString()} views\n\n` +
+                                                `🔗 ${apiData.videoUrl}\n\n` +
+                                                `${Config.FOOTER || '> Powered by YTMAX API'}`;
+
+                            await sendAudio(conn, mek.chat, audioBuffer, fileName, type, finalCaption, mekInfo);
+                            await conn.sendMessage(mek.chat, { react: { text: '✅', key: mekInfo.key } });
+
+                        } catch (error) {
+                            console.error('Song Download Error:', error);
+                            await conn.sendMessage(mek.chat, { react: { text: '❌', key: mekInfo.key } });
+                            reply(`❎ Error: ${error.message || 'Download failed'}`);
+                        }
+                    } catch (error) {
+                        console.error('Reaction handler error:', error);
+                    }
+                };
+
+                // Add reaction listener
+                conn.ev.on('messages.upsert', reactionListener);
 
                 // Button handler
                 const buttonHandler = async (msgData) => {
@@ -208,10 +308,21 @@ cmd(
                         await conn.sendMessage(mek.chat, { react: { text: '⏳', key: receivedMsg.key } });
 
                         try {
-                            const type = buttonId.startsWith(`song-audio-${sessionId}`) ? 'audio' : 'document';
+                            let type, qualityText;
                             
+                            if (buttonId.startsWith(`song-audio-${sessionId}`)) {
+                                type = 'audio';
+                                qualityText = 'Audio MP3';
+                            } else if (buttonId.startsWith(`song-document-${sessionId}`)) {
+                                type = 'document';
+                                qualityText = 'Document MP3';
+                            } else if (buttonId.startsWith(`song-voice-${sessionId}`)) {
+                                type = 'voice';
+                                qualityText = 'Voice Message';
+                            }
+
                             // Download audio using YTMAX API
-                            const audioResponse = await axiosInstance.get(ytData.audio, {
+                            const audioResponse = await axiosInstance.get(apiData.ytData.audio, {
                                 responseType: 'arraybuffer',
                                 headers: { 
                                     Referer: 'https://www.youtube.com/',
@@ -221,15 +332,15 @@ cmd(
                             });
 
                             const audioBuffer = Buffer.from(audioResponse.data, 'binary');
-                            const fileName = `${(ytData.title || videoInfo?.title || 'audio').replace(/[<>:"\/\\|?*]+/g, '')}.mp3`;
+                            const fileName = `${(apiData.ytData.title || apiData.videoInfo?.title || 'audio').replace(/[<>:"\/\\|?*]+/g, '')}.mp3`;
 
                             // Prepare final caption
-                            const finalCaption = `🎵 *${ytData.title || videoInfo?.title || 'Audio'}*\n` +
-                                                `⏱ ${videoInfo?.timestamp || 'N/A'}\n` +
-                                                `👤 ${videoInfo?.author?.name || 'Unknown Artist'}\n` +
-                                                `👀 ${(videoInfo?.views || 'N/A').toLocaleString()} views\n\n` +
-                                                `🔗 ${videoUrl}\n\n` +
-                                                `> Powered by YTMAX API`;
+                            const finalCaption = `🎵 *${apiData.ytData.title || apiData.videoInfo?.title || 'Audio'}*\n` +
+                                                `⏱ ${apiData.videoInfo?.timestamp || 'N/A'}\n` +
+                                                `👤 ${apiData.videoInfo?.author?.name || 'Unknown Artist'}\n` +
+                                                `👀 ${(apiData.videoInfo?.views || 'N/A').toLocaleString()} views\n\n` +
+                                                `🔗 ${apiData.videoUrl}\n\n` +
+                                                `${Config.FOOTER || '> Powered by YTMAX API'}`;
 
                             await sendAudio(conn, mek.chat, audioBuffer, fileName, type, finalCaption, receivedMsg);
                             await conn.sendMessage(mek.chat, { react: { text: '✅', key: receivedMsg.key } });
@@ -241,13 +352,14 @@ cmd(
                     }
                 };
 
-                // Add listener
+                // Add button listener
                 conn.ev.on('messages.upsert', buttonHandler);
 
-                // Remove listener after 1 minute
+                // Remove listeners after 3 minutes
                 setTimeout(() => {
                     conn.ev.off('messages.upsert', buttonHandler);
-                }, 60000);
+                    conn.ev.off('messages.upsert', reactionListener);
+                }, 180000);
 
             } else {
                 // Use text-based interface with both reactions and text replies
@@ -271,9 +383,10 @@ cmd(
                                 `👀 ${(videoInfo?.views || 'N/A').toLocaleString()} views\n\n` +
                                 `🔗 ${videoUrl}\n\n` +
                                 `*Choose format:*\n` +
-                                `1️⃣ - For Audio Format 🎵\n` +
-                                `2️⃣ - For Document Format 📁\n\n` +
-                                `*React with 1️⃣/2️⃣ OR reply with 1/2*`;
+                                `1️⃣ - Audio Format 🎵 (Playable)\n` +
+                                `2️⃣ - Document Format 📁 (Downloadable)\n` +
+                                `3️⃣ - Voice Message 🎤 (PTT)\n\n` +
+                                `*React with 1️⃣/2️⃣/3️⃣ OR reply with 1/2/3*`;
 
                 // Send song info with thumbnail
                 const sentMsg = await conn.sendMessage(mek.chat, {
@@ -315,6 +428,7 @@ cmd(
                             if (reactedMessageId === optionsMessageId) {
                                 if (reaction === '1️⃣') selection = '1';
                                 if (reaction === '2️⃣') selection = '2';
+                                if (reaction === '3️⃣') selection = '3';
                             }
                         }
                         
@@ -326,10 +440,10 @@ cmd(
                             // Check if it's a reply to our options message
                             const isReply = message.extendedTextMessage?.contextInfo?.stanzaId === optionsMessageId;
                             
-                            // Check if it's a direct message with just 1 or 2 (not a reply)
-                            const isDirectNumber = ['1', '2'].includes(messageText.trim()) && !message.extendedTextMessage?.contextInfo;
+                            // Check if it's a direct message with just 1, 2 or 3 (not a reply)
+                            const isDirectNumber = ['1', '2', '3'].includes(messageText.trim()) && !message.extendedTextMessage?.contextInfo;
                             
-                            if ((isReply || isDirectNumber) && ['1', '2'].includes(messageText.trim())) {
+                            if ((isReply || isDirectNumber) && ['1', '2', '3'].includes(messageText.trim())) {
                                 selection = messageText.trim();
                             }
                         }
@@ -364,25 +478,19 @@ cmd(
                                             `👤 ${videoInfo?.author?.name || 'Unknown Artist'}\n` +
                                             `👀 ${(videoInfo?.views || 'N/A').toLocaleString()} views\n\n` +
                                             `🔗 ${videoUrl}\n\n` +
-                                            `> Powered by YTMAX API`;
+                                            `${Config.FOOTER || '> Powered by YTMAX API'}`;
+
+                        let type;
+                        if (selection === "1") {
+                            type = 'audio';
+                        } else if (selection === "2") {
+                            type = 'document';
+                        } else if (selection === "3") {
+                            type = 'voice';
+                        }
 
                         // Send audio based on user choice
-                        if (selection === "1") {
-                            await conn.sendMessage(mek.chat, {
-                                audio: audioBuffer,
-                                mimetype: 'audio/mpeg',
-                                fileName: fileName,
-                                ptt: false,
-                                caption: finalCaption
-                            }, { quoted: mek });
-                        } else {
-                            await conn.sendMessage(mek.chat, {
-                                document: audioBuffer,
-                                mimetype: 'audio/mpeg',
-                                fileName: fileName,
-                                caption: finalCaption
-                            }, { quoted: mek });
-                        }
+                        await sendAudio(conn, mek.chat, audioBuffer, fileName, type, finalCaption, mekInfo);
 
                         // Send success reaction
                         try {
