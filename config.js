@@ -64,7 +64,7 @@ module.exports = {
     PMBLOCKER: process.env.PMBLOCKER || "true",
 
     // ===== BOT BEHAVIOR & APPEARANCE =====
-    FOOTER: process.env.FOOTER || "© 𝘾𝙧𝙚𝙖𝙩𝙚𝙙 𝘽𝙮 𝙈𝙧 𝙁𝙧𝙖𝙣𝙠 𝙊𝙁𝘾 ッ",
+    FOOTER: process.env.FOOTER || "> © 𝘾𝙧𝙚𝙖𝙩𝙚𝙙 𝘽𝙮 𝙈𝙧 𝙁𝙧𝙖𝙣𝙠 𝙊𝙁𝘾 ッ",
     ALWAYSONLINE: getConfig("ALWAYSONLINE") || process.env.ALWAYSONLINE || "false",
     AUTOSTATUSREACT: getConfig("AUTOSTATUSREACT") || process.env.AUTOSTATUSREACT || "true",
     AUTOSTATUSSEEN: getConfig("AUTOSTATUSSEEN") || process.env.AUTOSTATUSSEEN || "true",
