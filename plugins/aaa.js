@@ -198,7 +198,7 @@ cmd(
                 }, 60000);
 
             } else {
-                // Use text-based interface
+                // Use text-based interface with number reactions
                 
                 // Fetch thumbnail in parallel with audio download
                 const [thumbnailResponse] = await Promise.all([
@@ -218,9 +218,9 @@ cmd(
                                 `👤 ${videoInfo?.author?.name || 'Unknown Artist'}\n` +
                                 `👀 ${(videoInfo?.views || 'N/A').toLocaleString()} views\n\n` +
                                 `🔗 ${videoUrl}\n\n` +
-                                `\`Reply with:\`\n` +
-                                `1 - For Audio Format 🎵\n` +
-                                `2 - For Document Format 📁\n\n` +
+                                `*React with:*\n` +
+                                `1️⃣ - For Audio Format 🎵\n` +
+                                `2️⃣ - For Document Format 📁\n\n` +
                                 `> ${Config.FOOTER || 'Powered by Kaiz API'}`;
 
                 // Send song info with thumbnail
@@ -239,39 +239,29 @@ cmd(
                     }
                 }, { quoted: mek });
 
-                // Set up response listener
-                const messageListener = async (messageUpdate) => {
+                // Set up reaction listener
+                const reactionListener = async (messageUpdate) => {
                     try {
                         const mekInfo = messageUpdate?.messages[0];
-                        if (!mekInfo?.message) return;
+                        if (!mekInfo?.message?.reactionMessage) return;
 
-                        const message = mekInfo.message;
-                        const messageType = message.conversation || message.extendedTextMessage?.text;
-                        const isReplyToSentMsg = message.extendedTextMessage?.contextInfo?.stanzaId === sentMsg.key.id;
+                        const reaction = mekInfo.message.reactionMessage.text;
+                        const isReactionToSentMsg = mekInfo.message.reactionMessage.key.id === sentMsg.key.id;
+                        const isFromSameChat = mekInfo.key.remoteJid === mek.chat;
 
-                        if (!isReplyToSentMsg || !['1', '2'].includes(messageType?.trim())) return;
+                        if (!isReactionToSentMsg || !isFromSameChat || !['1️⃣', '2️⃣'].includes(reaction)) return;
 
                         // Immediately remove listener
-                        conn.ev.off('messages.upsert', messageListener);
+                        conn.ev.off('messages.upsert', reactionListener);
 
-                        // Delete the options message first (works even if not admin)
-                        try {
-                            await conn.sendMessage(mek.chat, {
-                                delete: sentMsg.key
-                            });
-                            console.log(`Options message deleted: ${sentMsg.key.id}`);
-                        } catch (deleteError) {
-                            console.error("Failed to delete options message:", deleteError);
-                        }
-
-                        // Start download without waiting for confirmation message
+                        // Start download
                         const audioPromise = axiosInstance.get(songData.download_url, {
                             responseType: 'arraybuffer',
                             headers: { 
                                 Referer: 'https://www.youtube.com/',
                                 'Accept-Encoding': 'identity'
                             },
-                            timeout: 15000 // Reduced from 30000
+                            timeout: 15000
                         }).then(response => Buffer.from(response.data, 'binary'));
 
                         // Send "downloading" message and wait for both
@@ -282,19 +272,21 @@ cmd(
 
                         const fileName = `${(songData.title || videoInfo?.title || 'audio').replace(/[<>:"\/\\|?*]+/g, '')}.mp3`;
 
-                        // Send audio based on user choice
-                        if (messageType.trim() === "1") {
+                        // Send audio based on user reaction
+                        if (reaction === "1️⃣") {
                             await conn.sendMessage(mek.chat, {
                                 audio: audioBuffer,
                                 mimetype: 'audio/mpeg',
                                 fileName: fileName,
-                                ptt: false
+                                ptt: false,
+                                caption: `🎵 *${songData.title || videoInfo?.title || 'Audio'}*\n⏱ ${videoInfo?.timestamp || 'N/A'}\n👤 ${videoInfo?.author?.name || 'Unknown Artist'}`
                             }, { quoted: mek });
                         } else {
                             await conn.sendMessage(mek.chat, {
                                 document: audioBuffer,
                                 mimetype: 'audio/mpeg',
-                                fileName: fileName
+                                fileName: fileName,
+                                caption: `📁 *${songData.title || videoInfo?.title || 'Audio'}*\n⏱ ${videoInfo?.timestamp || 'N/A'}\n👤 ${videoInfo?.author?.name || 'Unknown Artist'}`
                             }, { quoted: mek });
                         }
 
@@ -320,11 +312,11 @@ cmd(
                     }
                 };
 
-                conn.ev.on('messages.upsert', messageListener);
+                conn.ev.on('messages.upsert', reactionListener);
 
                 // Remove listener after 2 minutes
                 setTimeout(() => {
-                    conn.ev.off('messages.upsert', messageListener);
+                    conn.ev.off('messages.upsert', reactionListener);
                 }, 120000);
             }
 
