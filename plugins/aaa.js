@@ -56,10 +56,26 @@ async function fetchThumbnail(thumbnailUrl) {
 
 // Utility function to send audio
 async function sendAudio(conn, chat, audioBuffer, fileName, type, caption, quoted) {
-    const message = type === 'audio'
-        ? { audio: audioBuffer, mimetype: 'audio/mpeg', fileName, ptt: false }
-        : { document: audioBuffer, mimetype: 'audio/mpeg', fileName };
-    await conn.sendMessage(chat, { ...message, caption }, { quoted });
+    if (type === 'audio') {
+        await conn.sendMessage(chat, { 
+            audio: audioBuffer, 
+            mimetype: 'audio/mpeg', 
+            fileName, 
+            ptt: false 
+        }, { quoted });
+    } else if (type === 'document') {
+        await conn.sendMessage(chat, { 
+            document: audioBuffer, 
+            mimetype: 'audio/mpeg', 
+            fileName 
+        }, { quoted });
+    } else if (type === 'whatsapp') {
+        await conn.sendMessage(chat, { 
+            audio: audioBuffer, 
+            mimetype: 'audio/mp4', 
+            ptt: true 
+        }, { quoted });
+    }
 }
 
 cmd(
@@ -127,6 +143,11 @@ cmd(
                             buttonId: `song-document-${sessionId}-${encodeURIComponent(videoUrl)}`,
                             buttonText: { displayText: '📁 Document (Save)' },
                             type: 1
+                        },
+                        {
+                            buttonId: `song-whatsapp-${sessionId}-${encodeURIComponent(videoUrl)}`,
+                            buttonText: { displayText: '📲 WhatsApp Audio' },
+                            type: 1
                         }
                     ],
                     headerType: 1,
@@ -161,10 +182,13 @@ cmd(
                         await conn.sendMessage(mek.chat, { react: { text: '⏳', key: receivedMsg.key } });
 
                         try {
-                            const type = buttonId.startsWith(`song-audio-${sessionId}`) ? 'audio' : 'document';
+                            let type = 'audio';
+                            if (buttonId.startsWith(`song-audio-${sessionId}`)) type = 'audio';
+                            if (buttonId.startsWith(`song-document-${sessionId}`)) type = 'document';
+                            if (buttonId.startsWith(`song-whatsapp-${sessionId}`)) type = 'whatsapp';
                             
                             // Extract video URL from button ID
-                            const urlMatch = buttonId.match(/song-(audio|document)-[^-]+-(.+)/);
+                            const urlMatch = buttonId.match(/song-(audio|document|whatsapp)-[^-]+-(.+)/);
                             const targetVideoUrl = urlMatch ? decodeURIComponent(urlMatch[2]) : videoUrl;
                             
                             const freshSongData = await fetchAudioData(targetVideoUrl); // Fresh API call
@@ -220,8 +244,9 @@ cmd(
                                 `🔗 ${videoUrl}\n\n` +
                                 `*Choose format:*\n` +
                                 `1️⃣ - For Audio Format 🎵\n` +
-                                `2️⃣ - For Document Format 📁\n\n` +
-                                `*React with 1️⃣/2️⃣ OR reply with 1/2*`;
+                                `2️⃣ - For Document Format 📁\n` +
+                                `3️⃣ - For WhatsApp Audio 📲\n\n` +
+                                `*React with 1️⃣/2️⃣/3️⃣ OR reply with 1/2/3*`;
 
                 // Send song info with thumbnail
                 const sentMsg = await conn.sendMessage(mek.chat, {
@@ -253,7 +278,7 @@ cmd(
 
                         let selection = null;
                         
-                        // Check for reactions (FIXED - proper reaction detection)
+                        // Check for reactions
                         if (mekInfo.message.reactionMessage) {
                             const reaction = mekInfo.message.reactionMessage.text;
                             // Get the ID of the message that was reacted to
@@ -263,6 +288,7 @@ cmd(
                             if (reactedMessageId === optionsMessageId) {
                                 if (reaction === '1️⃣') selection = '1';
                                 if (reaction === '2️⃣') selection = '2';
+                                if (reaction === '3️⃣') selection = '3';
                             }
                         }
                         
@@ -274,10 +300,10 @@ cmd(
                             // Check if it's a reply to our options message
                             const isReply = message.extendedTextMessage?.contextInfo?.stanzaId === optionsMessageId;
                             
-                            // Check if it's a direct message with just 1 or 2 (not a reply)
-                            const isDirectNumber = ['1', '2'].includes(messageText.trim()) && !message.extendedTextMessage?.contextInfo;
+                            // Check if it's a direct message with just 1 or 2 or 3 (not a reply)
+                            const isDirectNumber = ['1', '2', '3'].includes(messageText.trim()) && !message.extendedTextMessage?.contextInfo;
                             
-                            if ((isReply || isDirectNumber) && ['1', '2'].includes(messageText.trim())) {
+                            if ((isReply || isDirectNumber) && ['1', '2', '3'].includes(messageText.trim())) {
                                 selection = messageText.trim();
                             }
                         }
@@ -315,12 +341,19 @@ cmd(
                                 ptt: false,
                                 caption: `🎵 *${songData.title || videoInfo?.title || 'Audio'}*\n⏱ ${videoInfo?.timestamp || 'N/A'}\n👤 ${videoInfo?.author?.name || 'Unknown Artist'}`
                             }, { quoted: mek });
-                        } else {
+                        } else if (selection === "2") {
                             await conn.sendMessage(mek.chat, {
                                 document: audioBuffer,
                                 mimetype: 'audio/mpeg',
                                 fileName: fileName,
                                 caption: `📁 *${songData.title || videoInfo?.title || 'Audio'}*\n⏱ ${videoInfo?.timestamp || 'N/A'}\n👤 ${videoInfo?.author?.name || 'Unknown Artist'}`
+                            }, { quoted: mek });
+                        } else if (selection === "3") {
+                            await conn.sendMessage(mek.chat, {
+                                audio: audioBuffer,
+                                mimetype: 'audio/mp4',
+                                ptt: true,
+                                caption: `📲 *${songData.title || videoInfo?.title || 'WhatsApp Audio'}*\n⏱ ${videoInfo?.timestamp || 'N/A'}\n👤 ${videoInfo?.author?.name || 'Unknown Artist'}`
                             }, { quoted: mek });
                         }
 
