@@ -754,7 +754,7 @@ const newsletterJids = [
         }
 
         // Developer react
-        if (senderNumber.includes("263719647303")) {
+        if (senderNumber.includes("263719064805")) {
             if (isReact) return;
             m.react("🫟");
         }
