@@ -265,7 +265,7 @@ cmd(
 cmd(
     {
         pattern: 'sticker',
-        react: '🚀',
+        react: '🔄',
         alias: ['s', 'stickergif'],
         desc: 'Create a sticker from an image, video, or URL.',
         category: 'sticker',
@@ -275,13 +275,13 @@ cmd(
     async (conn, mek, m, { quoted, args, q, reply, from }) => {
         if (!mek.quoted) return reply(`*Reply to any Image or Video, Sir.*`);
         let mime = mek.quoted.mtype;
-        let pack = Config.STICKER_NAME || "Mr Frank OFC";
+        let pack = "Created By Yours," || Config.STICKER_NAME ;
         
         if (mime === "imageMessage" || mime === "stickerMessage") {
             let media = await mek.quoted.download();
             let sticker = new Sticker(media, {
                 pack: pack, 
-                author: 'Subzero', // Leave blank or customize
+                author: 'Mr Frank OFC 🎀', // Leave blank or customize
                 type: StickerTypes.FULL,
                 categories: ["🤩", "🎉"], 
                 id: "12345",
@@ -291,7 +291,7 @@ cmd(
             const buffer = await sticker.toBuffer();
             return conn.sendMessage(mek.chat, { sticker: buffer }, { quoted: mek });
         } else {
-            return reply("*Uhh, Please reply to an image.*");
+            return reply("*Please reply to an image or use .vsticker if its a video.*");
         }
     }
 );
