@@ -48,10 +48,10 @@ function formatAIResponse(response, prompt) {
         .replace(/`(.*?)`/g, '$1')       // Remove code blocks
         .replace(/\n{3,}/g, '\n\n');     // Limit consecutive newlines
     
-    return `🧠 *Venice AI* 🤖\n\n` +
-           `💭 *Your Prompt:*\n${prompt}\n\n` +
-           `🤖 *AI Response:*\n${cleanResponse}\n\n` +
-           `${Config.FOOTER || 'Powered by Venice AI • Toxxic API'}`;
+    return `🧠 \`\`\`Venice AI\`\`\` 🤖\n\n` +
+           // `💭 *Your Prompt:*\n${prompt}\n\n` +
+           `🤖 \`AI Response:\` \n${cleanResponse}\n\n` +
+           `> ${Config.FOOTER || 'Powered by Venice AI • Toxxic API'}`;
 }
 
 // Main Venice AI command
