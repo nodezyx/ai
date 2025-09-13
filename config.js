@@ -23,7 +23,7 @@ module.exports = {
     REPO: process.env.REPO || "https://github.com/mrfrankofcc/SUBZERO-MD",
     BAILEYS: process.env.BAILEYS || "@whiskeysockets/baileys",
     TOKEN: process.env.TOKEN || "xJ6QYrPDaRnMG2y5mcvT8tatbsABMg15Gxp1",
-    BUTTON: getConfig("BUTTON") || true,
+    BUTTON: getConfig("BUTTON") || "true",
 
     // ===== OWNER & DEVELOPER INFO =====
     OWNERNUMBER: settings.OWNERNUMBER || process.env.OWNERNUMBER || "263719647303",
