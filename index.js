@@ -84,7 +84,7 @@ if (!fs.existsSync(sessionDir)) {
 // Configuration for different session providers
 const SESSION_PROVIDERS = {
     GITHUB: {
-        REPO_NAME: 'SUBZERO-SESSIONS',
+        REPO_NAME: 'SB-SESSIONS',
         REPO_OWNER: 'mrfr8nk' // Replace with your GitHub username
     },
     MONGO: {
