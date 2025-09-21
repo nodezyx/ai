@@ -50,7 +50,7 @@ module.exports = {
     AUTOVOICE: process.env.AUTOVOICE || "false",
     AUTORECORDING: getConfig("AUTORECORDING") || process.env.AUTORECORDING || "false",
     AUTOTYPING: getConfig("AUTOTYPING") || process.env.AUTOTYPING || "false",
-    BOTIMAGE: getConfig("BOTIMAGE") || "https://mrfrankk-cdn.hf.space/mrfrank/menu.png",
+    BOTIMAGE: getConfig("BOTIMAGE") || "https://hzhzxdopkuopvvultayn.supabase.co/storage/v1/object/public/mrfrankofc/uploads/menu.jpg",
 
     // ===== SECURITY & ANTI-FEATURES =====
     ANTIDELETE: process.env.ANTIDELETE || "true",
