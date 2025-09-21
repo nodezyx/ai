@@ -19,7 +19,7 @@
     "api-dylux": "latest",
     "btch-downloader": "^2.2.9",
     "better-sqlite3": "*",
-    
+    "@supabase/supabase-js": "latest",
     "cheerio": "^1.0.0-rc.12",
     "crypto-digest-sync": "^1.0.0",
     "crypto-js": "latest",
