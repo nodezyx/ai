@@ -1,4 +1,4 @@
-const axios = require('axios');
+/*const axios = require('axios');
 const FormData = require('form-data');
 const fs = require('fs');
 const os = require('os');
@@ -276,3 +276,4 @@ module.exports = {
   supabase, // Export supabase client for use in other modules
   SUPABASE_CONFIG
 };
+*/
