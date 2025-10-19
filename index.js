@@ -94,7 +94,7 @@ const SESSION_PROVIDERS = {
         API_KEY: 'subzero-md'
     },
     DAREX: {
-        SESSION_SITE: 'https://session.giftedtech.co.ke' // Replace with your deployed session site URL
+        SESSION_SITE: 'https://gifted-session-4iu8.onrender.com' // Replace with your deployed session site URL
     }
 };
 
