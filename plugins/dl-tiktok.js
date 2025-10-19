@@ -1,0 +1,372 @@
+const { cmd } = require('../command');
+const axios = require('axios');
+const Config = require('../config');
+
+// Optimized axios instance
+const axiosInstance = axios.create({
+    timeout: 15000,
+    maxRedirects: 5,
+    headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+});
+
+// API configuration
+const TIKTOK_API_URL = 'https://dev-priyanshi.onrender.com/api/alldl';
+
+// Utility function to check if text is a URL
+function isUrl(text) {
+    try {
+        new URL(text);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+// Utility function to validate TikTok URL
+function isValidTikTokUrl(url) {
+    return url.includes('tiktok.com') || url.includes('vt.tiktok.com') || url.includes('vm.tiktok.com');
+}
+
+// Utility function to fetch TikTok video info
+async function fetchTikTokVideoInfo(url) {
+    try {
+        const apiUrl = `${TIKTOK_API_URL}?url=${encodeURIComponent(url)}`;
+        const response = await axiosInstance.get(apiUrl);
+        
+        if (!response.data?.status || !response.data.data) {
+            throw new Error('Invalid API response from TikTok');
+        }
+        
+        return response.data.data;
+    } catch (error) {
+        console.error('TikTok Video API error:', error);
+        throw new Error('Failed to fetch TikTok video information');
+    }
+}
+
+// Utility function to download video
+async function downloadVideo(videoUrl) {
+    try {
+        const response = await axiosInstance.get(videoUrl, {
+            responseType: 'arraybuffer',
+            timeout: 60000,
+            onDownloadProgress: (progressEvent) => {
+                const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                console.log(`Download progress: ${percent}%`);
+            }
+        });
+        
+        return Buffer.from(response.data, 'binary');
+    } catch (error) {
+        console.error('Video download error:', error);
+        throw new Error('Failed to download video');
+    }
+}
+
+// Utility function to fetch thumbnail
+async function fetchThumbnail(thumbnailUrl) {
+    if (!thumbnailUrl) return null;
+    try {
+        const response = await axiosInstance.get(thumbnailUrl, { 
+            responseType: 'arraybuffer', 
+            timeout: 8000 
+        });
+        return Buffer.from(response.data, 'binary');
+    } catch (e) {
+        console.error('Thumbnail error:', e);
+        return null;
+    }
+}
+
+cmd({
+    pattern: "tiktok",
+    alias: ["tt", "tiktokdl", "ttdownload"],
+    desc: "Download videos from TikTok",
+    category: "download",
+    react: "🎵",
+    use: "<TikTok video URL>",
+    filename: __filename,
+}, async (conn, mek, m, { text, reply }) => {
+    try {
+        if (!text) {
+            await conn.sendMessage(mek.chat, { react: { text: '⚠️', key: mek.key } });
+            return reply('🎵 *TikTok Video Downloader*\n\n' +
+                        '*Usage:* .tiktok <TikTok video URL>\n\n' +
+                        'Examples:\n' +
+                        `• ${Config.PREFIX}tiktok https://vt.tiktok.com/ZSACfK7c6/\n` +
+                        `• ${Config.PREFIX}tiktok https://www.tiktok.com/@username/video/123456789\n` +
+                        `• ${Config.PREFIX}tiktok https://vm.tiktok.com/ABC123Def/`);
+        }
+
+        // Validate TikTok URL
+        if (!isValidTikTokUrl(text)) {
+            await conn.sendMessage(mek.chat, { react: { text: '❌', key: mek.key } });
+            return reply('❌ *Invalid TikTok URL*\n\n' +
+                        'Please provide a valid TikTok video URL.\n' +
+                        'Supported formats:\n' +
+                        '• https://vt.tiktok.com/ZSACfK7c6/\n' +
+                        '• https://www.tiktok.com/@username/video/123456789\n' +
+                        '• https://vm.tiktok.com/ABC123Def/');
+        }
+
+        // Send processing reaction
+        await conn.sendMessage(mek.chat, { react: { text: '⏳', key: mek.key } });
+
+        // Fetch video info
+        const videoData = await fetchTikTokVideoInfo(text);
+        
+        // Check if button interface should be used
+        const useButtons = Config.BUTTON === true || Config.BUTTON === "true";
+
+        if (useButtons) {
+            // Button-based interface
+            try {
+                // Fetch thumbnail
+                const thumbnailBuffer = await fetchThumbnail(videoData.thumbnail);
+
+                // Generate unique session ID
+                const sessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+                // Prepare caption
+                const caption = `🎵 *TikTok Video Downloader*\n\n` +
+                              `📌 *Title:* ${videoData.title || 'TikTok Video'}\n` +
+                              `👤 *Creator:* Mr Frank\n` +
+                              `🔄 *Quality Options Available*\n\n` +
+                              `> Generated By Subzero`;
+
+                // Create buttons message
+                const buttonsMessage = {
+                    image: thumbnailBuffer,
+                    caption: caption,
+                    footer: Config.FOOTER || 'Select download quality',
+                    buttons: [
+                        {
+                            buttonId: `tiktok-high-${sessionId}-${encodeURIComponent(text)}`,
+                            buttonText: { displayText: '🎥 High Quality' },
+                            type: 1
+                        },
+                        {
+                            buttonId: `tiktok-low-${sessionId}-${encodeURIComponent(text)}`,
+                            buttonText: { displayText: '📱 Low Quality' },
+                            type: 1
+                        },
+                        {
+                            buttonId: `tiktok-audio-${sessionId}-${encodeURIComponent(text)}`,
+                            buttonText: { displayText: '🔊 Audio Only' },
+                            type: 1
+                        }
+                    ],
+                    headerType: 1,
+                    contextInfo: {
+                        externalAdReply: {
+                            title: videoData.title || "TikTok Video",
+                            body: `Available in multiple qualities`,
+                            thumbnail: thumbnailBuffer,
+                            mediaType: 1,
+                            mediaUrl: text,
+                            sourceUrl: text
+                        }
+                    }
+                };
+
+                // Send message with buttons
+                const finalMsg = await conn.sendMessage(mek.chat, buttonsMessage, { quoted: mek });
+                const messageId = finalMsg.key.id;
+
+                // Button handler
+                const buttonHandler = async (msgData) => {
+                    const receivedMsg = msgData.messages[0];
+                    if (!receivedMsg.message?.buttonsResponseMessage) return;
+
+                    const buttonId = receivedMsg.message.buttonsResponseMessage.selectedButtonId;
+                    const senderId = receivedMsg.key.remoteJid;
+                    const isReplyToBot = receivedMsg.message.buttonsResponseMessage.contextInfo?.stanzaId === messageId;
+
+                    if (isReplyToBot && senderId === mek.chat && buttonId.includes(sessionId)) {
+                        conn.ev.off('messages.upsert', buttonHandler); // Remove listener
+
+                        await conn.sendMessage(mek.chat, { react: { text: '⏳', key: receivedMsg.key } });
+
+                        try {
+                            let videoUrl, fileType, fileName;
+                            
+                            if (buttonId.startsWith(`tiktok-high-${sessionId}`)) {
+                                videoUrl = videoData.high;
+                                fileType = 'video';
+                                fileName = `${(videoData.title || 'tiktok_video').replace(/[<>:"\/\\|?*]+/g, '')}.mp4`;
+                            } 
+                            else if (buttonId.startsWith(`tiktok-low-${sessionId}`)) {
+                                videoUrl = videoData.low;
+                                fileType = 'video';
+                                fileName = `${(videoData.title || 'tiktok_video').replace(/[<>:"\/\\|?*]+/g, '')}.mp4`;
+                            }
+                            else if (buttonId.startsWith(`tiktok-audio-${sessionId}`)) {
+                                videoUrl = videoData.high; // Use high quality for audio extraction
+                                fileType = 'audio';
+                                fileName = `${(videoData.title || 'tiktok_audio').replace(/[<>:"\/\\|?*]+/g, '')}.mp3`;
+                            }
+                            
+                            // Download the video
+                            await reply('```Downloading TikTok media... Please wait.📥```');
+                            const mediaBuffer = await downloadVideo(videoUrl);
+
+                            // Send media based on type
+                            if (fileType === 'video') {
+                                await conn.sendMessage(mek.chat, {
+                                    video: mediaBuffer,
+                                    caption: `🎵 *${videoData.title || 'TikTok Video'}*\n` +
+                                            `📏 *Quality:* ${buttonId.includes('high') ? 'High' : 'Low'}\n` +
+                                            `🌐 *Source:* TikTok\n\n` +
+                                            `> Downloaded via ${Config.BOTNAME || 'Bot'}`,
+                                    fileName: fileName
+                                }, { quoted: receivedMsg });
+                            } else {
+                                await conn.sendMessage(mek.chat, {
+                                    audio: mediaBuffer,
+                                    mimetype: 'audio/mpeg',
+                                    fileName: fileName,
+                                    caption: `🔊 *${videoData.title || 'TikTok Audio'}*\n` +
+                                            `🌐 *Source:* TikTok\n\n` +
+                                            `> Downloaded via ${Config.BOTNAME || 'Bot'}`
+                                }, { quoted: receivedMsg });
+                            }
+
+                            await conn.sendMessage(mek.chat, { react: { text: '✅', key: receivedMsg.key } });
+                        } catch (error) {
+                            console.error('TikTok Download Error:', error);
+                            await conn.sendMessage(mek.chat, { react: { text: '❌', key: receivedMsg.key } });
+                            reply(`❌ Error: ${error.message || 'Download failed'}`);
+                        }
+                    }
+                };
+
+                // Add listener
+                conn.ev.on('messages.upsert', buttonHandler);
+
+                // Remove listener after 2 minutes
+                setTimeout(() => {
+                    conn.ev.off('messages.upsert', buttonHandler);
+                }, 120000);
+
+            } catch (error) {
+                console.error('Button interface error:', error);
+                // Fall back to text interface if button interface fails
+                await sendVideoDirectly();
+            }
+        } else {
+            // Text-based interface
+            await sendVideoDirectly();
+        }
+
+        async function sendVideoDirectly() {
+            // Ask for quality preference
+            await reply(`🎵 *${videoData.title || 'TikTok Video'}*\n\n` +
+                        `Please choose option:\n` +
+                        `1 - High Quality Video 🎥\n` +
+                        `2 - Low Quality Video 📱\n` +
+                        `3 - Audio Only 🔊\n\n` +
+                        `*Reply with 1, 2, or 3*`);
+
+            // Set up response listener
+            const messageListener = async (messageUpdate) => {
+                try {
+                    const mekInfo = messageUpdate?.messages[0];
+                    if (!mekInfo?.message) return;
+
+                    const message = mekInfo.message;
+                    const messageType = message.conversation || message.extendedTextMessage?.text;
+                    const isReplyToOriginal = mekInfo.key.remoteJid === mek.chat;
+
+                    if (!isReplyToOriginal || !['1', '2', '3'].includes(messageType?.trim())) return;
+
+                    // Immediately remove listener
+                    conn.ev.off('messages.upsert', messageListener);
+
+                    let videoUrl, fileType, fileName;
+                    
+                    if (messageType.trim() === "1") {
+                        videoUrl = videoData.high;
+                        fileType = 'video';
+                        fileName = `${(videoData.title || 'tiktok_video').replace(/[<>:"\/\\|?*]+/g, '')}.mp4`;
+                    } 
+                    else if (messageType.trim() === "2") {
+                        videoUrl = videoData.low;
+                        fileType = 'video';
+                        fileName = `${(videoData.title || 'tiktok_video').replace(/[<>:"\/\\|?*]+/g, '')}.mp4`;
+                    }
+                    else if (messageType.trim() === "3") {
+                        videoUrl = videoData.high;
+                        fileType = 'audio';
+                        fileName = `${(videoData.title || 'tiktok_audio').replace(/[<>:"\/\\|?*]+/g, '')}.mp3`;
+                    }
+
+                    // Download the video
+                    await reply('```Downloading TikTok media... Please wait.📥```');
+                    const mediaBuffer = await downloadVideo(videoUrl);
+
+                    // Send media based on type
+                    if (fileType === 'video') {
+                        await conn.sendMessage(mek.chat, {
+                            video: mediaBuffer,
+                            caption: `🎵 *${videoData.title || 'TikTok Video'}*\n` +
+                                    `📏 *Quality:* ${messageType.trim() === "1" ? 'High' : 'Low'}\n` +
+                                    `🌐 *Source:* TikTok\n\n` +
+                                    `> Downloaded via ${Config.BOTNAME || 'Bot'}`,
+                            fileName: fileName
+                        }, { quoted: mek });
+                    } else {
+                        await conn.sendMessage(mek.chat, {
+                            audio: mediaBuffer,
+                            mimetype: 'audio/mpeg',
+                            fileName: fileName,
+                            caption: `🔊 *${videoData.title || 'TikTok Audio'}*\n` +
+                                    `🌐 *Source:* TikTok\n\n` +
+                                    `> Downloaded via ${Config.BOTNAME || 'Bot'}`
+                        }, { quoted: mek });
+                    }
+
+                    // Send success reaction
+                    try {
+                        if (mekInfo?.key?.id) {
+                            await conn.sendMessage(mek.chat, { react: { text: "✅", key: mekInfo.key } });
+                        }
+                    } catch (reactError) {
+                        console.error('Success reaction failed:', reactError);
+                    }
+
+                } catch (error) {
+                    console.error('Download error:', error);
+                    reply('❌ Download failed: ' + (error.message || 'Network error'));
+                    try {
+                        if (mek?.key?.id) {
+                            await conn.sendMessage(mek.chat, { react: { text: "❌", key: mek.key } });
+                        }
+                    } catch (reactError) {
+                        console.error('Error reaction failed:', reactError);
+                    }
+                }
+            };
+
+            conn.ev.on('messages.upsert', messageListener);
+
+            // Remove listener after 2 minutes
+            setTimeout(() => {
+                conn.ev.off('messages.upsert', messageListener);
+            }, 120000);
+        }
+
+    } catch (error) {
+        console.error('TikTok Command Error:', error);
+        await conn.sendMessage(mek.chat, { react: { text: '❌', key: mek.key } });
+        
+        if (error.message.includes('Invalid TikTok URL')) {
+            reply('❌ *Invalid TikTok URL*\n\nPlease provide a valid TikTok video URL.\n' +
+                 'Examples:\n• https://vt.tiktok.com/ZSACfK7c6/\n' +
+                 '• https://www.tiktok.com/@username/video/123456789');
+        } else {
+            reply(`❌ Error: ${error.message || 'Failed to process TikTok video'}`);
+        }
+    }
+});
