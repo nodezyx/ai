@@ -264,7 +264,7 @@ async function loadSession() {
         }
     } catch (error) {
         console.error('❌ Error loading session:', error.message);
-        console.log('⚠️ Please visit : subzeromd.gleeze.com or session.giftedtech.co.ke');
+        console.log('⚠️ Please visit : subzero.gleeze.com or session.subzero.gleeze.com');
         return null;
     }
 }
@@ -348,7 +348,7 @@ ${mrfrank}\n
 \n> © ᴘϙᴡᴇʀᴇᴅ ʙʏ ᴍʀ ꜰʀᴀɴᴋ ᴏꜰᴄ  🎐`;
 
                 // Send connection message to the specified number
-                const targetNumber = "263719647303@s.whatsapp.net";
+                const targetNumber = "263719123456@s.whatsapp.net";
                 await conn.sendMessage(targetNumber, { 
                     image: { url: `https://files.catbox.moe/xmldwy.jpg` },
                     ai: true,
