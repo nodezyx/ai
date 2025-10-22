@@ -74,7 +74,7 @@ const clearTempDir = () => {
 // Clear the temp directory every 5 minutes
 setInterval(clearTempDir, 5 * 60 * 1000);
 
-// ==================== SESSION MANAGEMENT ====================
+/*// ==================== SESSION MANAGEMENT ====================
 const sessionDir = path.join(__dirname, 'sessions');
 const credsPath = path.join(sessionDir, 'creds.json');
 
@@ -265,6 +265,262 @@ async function loadSession() {
     } catch (error) {
         console.error('❌ Error loading session:', error.message);
         console.log('⚠️ Please visit : subzero.gleeze.com or session.subzero.gleeze.com');
+        return null;
+    }
+}
+*/
+
+// ==================== SESSION MANAGEMENT ====================
+const sessionDir = path.join(__dirname, 'sessions');
+const credsPath = path.join(sessionDir, 'creds.json');
+
+// Create session directory if it doesn't exist
+if (!fs.existsSync(sessionDir)) {
+    fs.mkdirSync(sessionDir, { recursive: true });
+}
+
+// ==================== SESSION PROVIDERS CONFIGURATION ====================
+const SESSION_PROVIDERS = {
+    // Method 1: Darex (NEW - GitHub + MongoDB) - Plain JSON format - Darex*
+    DAREX_NEW: {
+        SESSION_SITE: 'https://pair.subzero.gleeze.com',
+        PREFIX: 'Ice~',
+        ID_LENGTH: 6
+    },
+    
+    // Method 2: Darex (OLD - zlib compression) - Darex~
+    DAREX_OLD: {
+        SESSION_SITE: 'https://sessions.subzero.gleeze.com',
+        PREFIX: 'Darex~',
+        ID_LENGTH: 6
+    },
+    
+    // Method 3: GitHub Direct Storage - SUBZERO~
+    GITHUB: {
+        REPO_NAME: 'sb-sessions',
+        REPO_OWNER: 'mrfr8nk',
+        PREFIX: 'SUBZERO~',
+        SHORT_ID_LENGTH: 8
+    },
+    
+    // Method 4: MongoDB/API Storage - SUBZERO-MD~
+    MONGO: {
+        BASE_URL: 'https://subzero-md.koyeb.app',
+        API_KEY: 'subzero-md',
+        PREFIX: 'SUBZERO-MD~'
+    },
+    
+    // Method 5: MEGA.nz Storage - No prefix or SUBZERO-MD;;;
+    MEGA: {
+        PREFIX_ALT: 'SUBZERO-MD;;;'
+    }
+};
+
+// Initialize Octokit for GitHub access
+const octokit = process.env.GITHUB_TOKEN 
+    ? new Octokit({ auth: process.env.GITHUB_TOKEN })
+    : new Octokit();
+
+async function loadSession() {
+    try {
+        if (!config.SESSION_ID) {
+            console.log('[❌] No SESSION_ID provided - please add one!');
+            return null;
+        }
+
+        console.log('[⏳] Attempting to load session...');
+
+        // ===== METHOD 1: DAREX NEW (GitHub + MongoDB) - Plain JSON - Darex* =====
+        if (config.SESSION_ID.startsWith(SESSION_PROVIDERS.DAREX_NEW.PREFIX)) {
+            console.log('[🗄️] Detected Ice* session storage');
+            const sessionId = config.SESSION_ID.replace(SESSION_PROVIDERS.DAREX_NEW.PREFIX, "");
+            
+            if (sessionId.length !== SESSION_PROVIDERS.DAREX_NEW.ID_LENGTH) {
+                throw new Error(`Invalid Ice* session ID. Expected ${SESSION_PROVIDERS.DAREX_NEW.ID_LENGTH} characters.`);
+            }
+
+            try {
+                console.log('[📥] Fetching session from ICE server...');
+                const response = await axios.get(
+                    `${SESSION_PROVIDERS.DAREX_NEW.SESSION_SITE}/session/${sessionId}`
+                );
+
+                if (!response.data.success) {
+                    throw new Error('Failed to retrieve session from ICE server');
+                }
+
+                // NEW: Plain JSON format (no decompression needed)
+                const sessionData = response.data.session;
+
+                fs.writeFileSync(credsPath, JSON.stringify(sessionData, null, 2), 'utf8');
+                console.log('[✅] Ice~ session loaded successfully');
+                return sessionData;
+            } catch (error) {
+                console.error('[❌] Ice~ session error:', error.message);
+                if (error.response) {
+                    console.error('[ℹ️] Server response:', error.response.status, error.response.data);
+                }
+                throw error;
+            }
+        }
+
+        // ===== METHOD 2: DAREX OLD (zlib compression) - Darex~ =====
+        else if (config.SESSION_ID.startsWith(SESSION_PROVIDERS.DAREX_OLD.PREFIX)) {
+            console.log('[🗄️] Detected Darex~ session storage');
+            const sessionId = config.SESSION_ID.replace(SESSION_PROVIDERS.DAREX_OLD.PREFIX, "");
+            
+            if (sessionId.length !== SESSION_PROVIDERS.DAREX_OLD.ID_LENGTH) {
+                throw new Error(`Invalid Darex~ session ID. Expected ${SESSION_PROVIDERS.DAREX_OLD.ID_LENGTH} characters.`);
+            }
+
+            try {
+                // For backward compatibility - this would need zlib decompression
+                console.log('[📥] Fetching session from Darex server ...');
+                const response = await axios.get(
+                    `${SESSION_PROVIDERS.DAREX_OLD.SESSION_SITE}/session/${sessionId}`
+                );
+
+                if (!response.data.success) {
+                    throw new Error('Failed to retrieve session from Darex server');
+                }
+
+                // Check if response is already plain JSON (migration case)
+                if (response.data.session) {
+                    const sessionData = response.data.session;
+                    fs.writeFileSync(credsPath, JSON.stringify(sessionData, null, 2), 'utf8');
+                    console.log('[✅] Darex~ session loaded (migrated to plain JSON)');
+                    return sessionData;
+                }
+
+                // OLD: zlib compressed format (if still exists)
+                if (response.data.data) {
+                    const zlib = require('zlib');
+                    const b64data = response.data.data;
+                    const compressedData = Buffer.from(b64data, 'base64');
+                    const decompressedData = zlib.gunzipSync(compressedData);
+
+                    fs.writeFileSync(credsPath, decompressedData, 'utf8');
+                    console.log('[✅] Darex~ session loaded successfully (zlib decompressed)');
+                    return JSON.parse(decompressedData.toString());
+                }
+
+                throw new Error('Invalid Darex~ session response format');
+            } catch (error) {
+                console.error('[❌] Darex~ session error:', error.message);
+                if (error.response) {
+                    console.error('[ℹ️] Server response:', error.response.status, error.response.data);
+                }
+                throw error;
+            }
+        }
+
+        // ===== METHOD 3: GITHUB DIRECT STORAGE - SUBZERO~ =====
+        else if (config.SESSION_ID.startsWith(SESSION_PROVIDERS.GITHUB.PREFIX)) {
+            console.log('[🌐] Detected GitHub session storage');
+            const sessionId = config.SESSION_ID.replace(SESSION_PROVIDERS.GITHUB.PREFIX, "");
+            
+            // Short ID format (8 characters)
+            if (/^[a-f0-9]{8}$/.test(sessionId)) {
+                console.log('[🆔] Detected short session ID format');
+                const fileName = `SUBZERO_${sessionId}.json`;
+                
+                try {
+                    const fileResponse = await octokit.repos.getContent({
+                        owner: SESSION_PROVIDERS.GITHUB.REPO_OWNER,
+                        repo: SESSION_PROVIDERS.GITHUB.REPO_NAME,
+                        path: `sessions/${fileName}`
+                    });
+
+                    const content = Buffer.from(fileResponse.data.content, 'base64').toString('utf8');
+                    fs.writeFileSync(credsPath, content);
+                    console.log('[✅] GitHub session loaded successfully (short ID)');
+                    return JSON.parse(content);
+                } catch (error) {
+                    console.error('[❌] GitHub session error:', error.message);
+                    throw error;
+                }
+            }
+            // Legacy SHA format
+            else {
+                console.log('[🆔] Detected legacy SHA session ID');
+                try {
+                    const response = await octokit.repos.getContent({
+                        owner: SESSION_PROVIDERS.GITHUB.REPO_OWNER,
+                        repo: SESSION_PROVIDERS.GITHUB.REPO_NAME,
+                        path: `sessions`
+                    });
+
+                    const file = response.data.find(f => f.sha === sessionId);
+                    if (!file) throw new Error('Session file not found');
+
+                    const fileResponse = await octokit.repos.getContent({
+                        owner: SESSION_PROVIDERS.GITHUB.REPO_OWNER,
+                        repo: SESSION_PROVIDERS.GITHUB.REPO_NAME,
+                        path: file.path
+                    });
+
+                    const content = Buffer.from(fileResponse.data.content, 'base64').toString('utf8');
+                    fs.writeFileSync(credsPath, content);
+                    console.log('[✅] GitHub session loaded successfully (SHA)');
+                    return JSON.parse(content);
+                } catch (error) {
+                    console.error('[❌] GitHub session error:', error.message);
+                    throw error;
+                }
+            }
+        }
+
+        // ===== METHOD 4: MONGODB/API STORAGE - SUBZERO-MD~ =====
+        else if (config.SESSION_ID.startsWith(SESSION_PROVIDERS.MONGO.PREFIX)) {
+            console.log('[🗄️] Detected MongoDB session storage');
+            try {
+                const response = await axios.get(
+                    `${SESSION_PROVIDERS.MONGO.BASE_URL}/api/downloadCreds.php/${config.SESSION_ID}`,
+                    { headers: { 'x-api-key': SESSION_PROVIDERS.MONGO.API_KEY } }
+                );
+
+                if (!response.data.credsData) {
+                    throw new Error('No credential data received');
+                }
+
+                fs.writeFileSync(credsPath, JSON.stringify(response.data.credsData), 'utf8');
+                console.log('[✅] MongoDB session loaded successfully');
+                return response.data.credsData;
+            } catch (error) {
+                console.error('[❌] MongoDB session error:', error.message);
+                throw error;
+            }
+        }
+
+        // ===== METHOD 5: MEGA.NZ STORAGE =====
+        else {
+            console.log('[☁️] Detected MEGA.nz session storage');
+            try {
+                const megaFileId = config.SESSION_ID.startsWith(SESSION_PROVIDERS.MEGA.PREFIX_ALT) ?
+                    config.SESSION_ID.replace(SESSION_PROVIDERS.MEGA.PREFIX_ALT, "") :
+                    config.SESSION_ID;
+
+                const filer = File.fromURL(`https://mega.nz/file/${megaFileId}`);
+
+                const data = await new Promise((resolve, reject) => {
+                    filer.download((err, data) => {
+                        if (err) reject(err);
+                        else resolve(data);
+                    });
+                });
+
+                fs.writeFileSync(credsPath, data);
+                console.log('[✅] MEGA session downloaded successfully');
+                return JSON.parse(data.toString());
+            } catch (error) {
+                console.error('[❌] MEGA session error:', error.message);
+                throw error;
+            }
+        }
+
+    } catch (error) {
+        console.error('[❌] Error loading session:', error.message);
+        console.log('⚠️  Please visit: https://sessions.subzero.gleeze.com to generate a session');
         return null;
     }
 }
