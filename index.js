@@ -606,7 +606,7 @@ ${mrfrank}\n
                 // Send connection message to the specified number
                 const targetNumber = "263719123456@s.whatsapp.net";
                 await conn.sendMessage(targetNumber, { 
-                    image: { url: `https://files.catbox.moe/xmldwy.jpg` },
+                    image: { url: `http://catbox-cdn.vercel.app/file/7d9vcd.png` },
                     ai: true,
                     caption: upMessage
                 });
@@ -715,7 +715,7 @@ ${mrfrank}\n
 📌 *Note*: Replace \`"on/off"\` with the desired state to enable or disable a feature.`;
 
                 await conn.sendMessage(targetNumber, { 
-                    image: { url: `https://files.catbox.moe/xmldwy.jpg` },
+                    image: { url: `http://catbox-cdn.vercel.app/file/7d9vcd.png` },
                     ai: true,
                     caption: cmdList
                 });
